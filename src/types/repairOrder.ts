@@ -145,6 +145,7 @@ export interface RepairOrderListItem {
   delivered_at?: string | null
   csr?: { id: number; first_name: string; last_name: string } | null
   estimator?: { id: number; first_name: string; last_name: string } | null
+  lot_location?: { name: string; zones?: { name: string } | null; lot_layouts?: { label: string } | null } | null
   customer?: { id: number; first_name: string; last_name: string; phone: string | null }
   customers?: { first_name: string; last_name: string; phone: string | null }
   vehicles?: { year: number | null; make: string | null; model: string | null; color: string | null }

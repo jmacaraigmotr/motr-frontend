@@ -371,7 +371,7 @@ export default function RepairOrdersView() {
                   <th className="h-11 px-5 text-left text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--text-default)] opacity-50 hidden lg:table-cell">Assigned</th>
                   <th className="h-11 px-5 text-left text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--text-default)] opacity-50 hidden md:table-cell">Job Type</th>
                   <th className="h-11 px-5 text-left text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--text-default)] opacity-50">Job Status</th>
-                  <th className="h-11 px-5 text-right text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--text-default)] opacity-50 whitespace-nowrap hidden sm:table-cell">Sched Out</th>
+                  <th className="h-11 px-5 text-left text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--text-default)] opacity-50 whitespace-nowrap hidden sm:table-cell">Location / Sched Out</th>
                   <th className="h-11 px-5 text-right text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--text-default)] opacity-50 hidden lg:table-cell">Billing</th>
                   <th className="h-11 px-4 w-36" aria-label="Actions" />
                 </tr>
@@ -482,19 +482,46 @@ export default function RepairOrdersView() {
                           <StatusPill label={jobStatusLabel} tone={jobStatusTone} />
                         </td>
 
-                        {/* Sched out */}
-                        <td className="px-5 py-3.5 align-middle text-right hidden sm:table-cell whitespace-nowrap">
-                          <span
-                            className={[
-                              'font-mono text-[12px] tabular-nums',
-                              isOverdue  ? 'text-[var(--danger-fg)] font-semibold' :
-                              isDueToday ? 'text-[var(--warning-fg)] font-semibold' :
-                                           'text-[var(--text-muted)]',
-                            ].join(' ')}
-                          >
-                            {fmtDate(out)}
-                            {isOverdue ? ' · OVR' : ''}
-                          </span>
+                        {/* Location / Sched Out */}
+                        <td className="px-5 py-3.5 align-middle hidden sm:table-cell">
+                          <div className="flex flex-col gap-0.5">
+                            {ro.lot_location && (
+                              <div className="flex flex-col gap-0">
+                                {ro.lot_location.lot_layouts?.label && (
+                                  <div className="flex items-baseline gap-1">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)] shrink-0">Lot</span>
+                                    <span className="text-[12px] text-[var(--text-default)] leading-tight">{ro.lot_location.lot_layouts.label}</span>
+                                  </div>
+                                )}
+                                {ro.lot_location.zones?.name && (
+                                  <div className="flex items-baseline gap-1">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)] shrink-0">Zone</span>
+                                    <span className="text-[12px] text-[var(--text-muted)] leading-tight">{ro.lot_location.zones.name}</span>
+                                  </div>
+                                )}
+                                <div className="flex items-baseline gap-1">
+                                  <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)] shrink-0">Spot</span>
+                                  <span className="text-[12px] text-[var(--text-default)] leading-tight">{ro.lot_location.name}</span>
+                                </div>
+                              </div>
+                            )}
+                            {out && (
+                              <span
+                                className={[
+                                  'font-mono text-[12px] tabular-nums',
+                                  isOverdue  ? 'text-[var(--danger-fg)] font-semibold' :
+                                  isDueToday ? 'text-[var(--warning-fg)] font-semibold' :
+                                               'text-[var(--text-muted)]',
+                                ].join(' ')}
+                              >
+                                {fmtDate(out)}
+                                {isOverdue ? ' · OVR' : ''}
+                              </span>
+                            )}
+                            {!ro.lot_location && !out && (
+                              <span className="text-[12px] text-[var(--text-muted)]">—</span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Billing */}
