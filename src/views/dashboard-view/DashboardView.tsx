@@ -473,8 +473,10 @@ export default function DashboardView() {
   )
 
   const totalWipValue = useMemo(
-    () => openRos.reduce((sum, ro) => sum + (ro.job_total?.[0]?.amount ?? ro.actual_total ?? ro.estimated_total ?? 0), 0),
-    [openRos],
+    () => ros
+      .filter(ro => !ro.deleted_at && ro.job_status === 'open')
+      .reduce((sum, ro) => sum + (ro.job_total?.[0]?.amount ?? ro.actual_total ?? ro.estimated_total ?? 0), 0),
+    [ros],
   )
 
   const dateLabel = format(new Date(), 'EEEE, MMM d')
