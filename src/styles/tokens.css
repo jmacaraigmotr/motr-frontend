@@ -1,0 +1,108 @@
+/* MOTR Design Tokens — §3 of the Optimization Brief */
+
+:root {
+  /* ── Surface scale (neutrals) ─────────────────────────────────────────── */
+  --surface-0: #faf9f6;
+  --surface-1: #f3f1ec;
+  --surface-2: #e7e4db;
+  --line:      #c9c6bb;
+
+  --text-muted:   #6f7079;
+  --text-default: #2a2c31;
+  --text-strong:  #111214;
+
+  /* ── Semantic hues ────────────────────────────────────────────────────── */
+  --accent:  oklch(0.72 0.15 65);
+  --info:    oklch(0.55 0.14 240);
+  --success: oklch(0.58 0.12 150);
+  --warning: oklch(0.76 0.14 80);
+  --danger:  oklch(0.55 0.18 25);
+
+  /* ── Derived washes ───────────────────────────────────────────────────── */
+  --accent-fg:      oklch(0.38 0.12 55);
+  --accent-bg:      color-mix(in oklch, oklch(0.72 0.15 65) 12%, var(--surface-0));
+  --accent-border:  color-mix(in oklch, oklch(0.72 0.15 65) 30%, var(--surface-0));
+
+  --info-fg:        oklch(0.38 0.12 240);
+  --info-bg:        color-mix(in oklch, var(--info) 12%, var(--surface-0));
+  --info-border:    color-mix(in oklch, var(--info) 30%, var(--surface-0));
+
+  --success-fg:     oklch(0.34 0.1 150);
+  --success-bg:     color-mix(in oklch, var(--success) 12%, var(--surface-0));
+  --success-border: color-mix(in oklch, var(--success) 30%, var(--surface-0));
+
+  --warning-fg:     oklch(0.42 0.1 65);
+  --warning-bg:     color-mix(in oklch, var(--warning) 14%, var(--surface-0));
+  --warning-border: color-mix(in oklch, var(--warning) 36%, var(--surface-0));
+
+  --danger-fg:      oklch(0.38 0.14 25);
+  --danger-bg:      color-mix(in oklch, var(--danger) 12%, var(--surface-0));
+  --danger-border:  color-mix(in oklch, var(--danger) 30%, var(--surface-0));
+
+  /* ── Spacing (px) ─────────────────────────────────────────────────────── */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 32px;
+  --space-10: 48px;
+  --space-11: 64px;
+
+  /* ── Radius ───────────────────────────────────────────────────────────── */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  /* ── Elevation ────────────────────────────────────────────────────────── */
+  --shadow-flat: none;
+  --shadow-raised: 0 4px 16px rgb(0 0 0 / 0.10), 0 1px 4px rgb(0 0 0 / 0.06);
+  --shadow-overlay: 0 8px 32px rgb(0 0 0 / 0.14), 0 2px 8px rgb(0 0 0 / 0.08);
+
+  /* ── Motion ───────────────────────────────────────────────────────────── */
+  --motion-duration: 160ms;
+  --motion-ease: cubic-bezier(0.2, 0.0, 0, 1);
+
+  /* ── Focus ring ───────────────────────────────────────────────────────── */
+  --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--info);
+
+  /* ── Sidebar (dark chrome) ───────────────────────────────────────────── */
+  --sidebar-bg:          #16181c;
+  --sidebar-border:      rgba(255, 255, 255, 0.08);
+  --sidebar-text:        rgba(255, 255, 255, 0.60);
+  --sidebar-text-active: #ffffff;
+  --sidebar-hover:       rgba(255, 255, 255, 0.07);
+  --sidebar-active-bg:   rgba(255, 255, 255, 0.11);
+  --sidebar-accent:      oklch(0.78 0.16 65);
+
+  /* ── Density ──────────────────────────────────────────────────────────── */
+  --row-height-compact:    44px;
+  --row-height-comfortable: 56px;
+  --btn-height-sm: 32px;
+  --btn-height-md: 40px;
+  --btn-height-lg: 48px;
+  --input-height:  40px;
+}
+
+/* Comfortable density — auto on coarse pointer (iPad/touch) */
+@media (pointer: coarse) {
+  :root {
+    --row-height-compact:    52px;
+    --row-height-comfortable: 60px;
+    --btn-height-sm: 40px;
+    --btn-height-md: 48px;
+    --btn-height-lg: 52px;
+    --input-height:  48px;
+  }
+}
+
+/* density-comfortable class override */
+.density-comfortable {
+  --row-height-compact:    56px;
+  --btn-height-md: 48px;
+  --input-height:  48px;
+}
