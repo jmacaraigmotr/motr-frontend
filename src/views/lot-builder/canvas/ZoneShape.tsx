@@ -8,6 +8,7 @@ interface ZoneShapeProps {
   selected: boolean
   readonly?: boolean
   locked?: boolean
+  suppressLabel?: boolean
   onSelect: () => void
   onUpdate: (updates: Partial<ZoneCanvasState>) => void
   onDblClick: () => void
@@ -120,6 +121,7 @@ function PolygonZoneShape({
   selected,
   readonly,
   locked,
+  suppressLabel,
   onSelect,
   onUpdate,
   onDblClick,
@@ -193,8 +195,8 @@ function PolygonZoneShape({
         lineJoin="round"
       />
 
-      {/* Header + label — visible on hover or selection only */}
-      {(hovered || selected) && (
+      {/* Header + label — visible on hover or selection only, never while placing spots */}
+      {(hovered || selected) && !suppressLabel && (
         <>
           <Rect
             x={minX}
@@ -243,6 +245,7 @@ function RectZoneShape({
   selected,
   readonly,
   locked,
+  suppressLabel,
   onSelect,
   onUpdate,
   onDblClick,
@@ -313,8 +316,8 @@ function RectZoneShape({
           strokeWidth={selected ? 2 : 1.5}
           cornerRadius={4}
         />
-        {/* Header + label — visible on hover or selection only */}
-        {(hovered || selected) && (
+        {/* Header + label — visible on hover or selection only, never while placing spots */}
+        {(hovered || selected) && !suppressLabel && (
           <>
             <Rect
               width={zone.canvas_w}

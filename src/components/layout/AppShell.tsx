@@ -14,6 +14,7 @@ import {
   DollarSign,
   LayoutDashboard,
   ClipboardList,
+  BarChart2,
   LogOut,
   Menu,
   HelpCircle,
@@ -59,6 +60,7 @@ const BASE_NAV_ITEMS: readonly NavItem[] = [
   { id: 'customer-view',      label: 'Customers',      icon: Users           },
   { id: 'repair-orders-view', label: 'Repair Orders',  icon: ClipboardList   },
   { id: 'accounting-view',    label: 'Transactions',   icon: DollarSign      },
+  { id: 'reports-view',       label: 'Reports',        icon: BarChart2       },
 ] as const
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -71,7 +73,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [newROId, setNewROId] = useState<number | null>(null)
-  const [tourOpen, setTourOpen] = useState(false)
+  const [tourOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
   const [shopPickerOpen, setShopPickerOpen] = useState(false)
@@ -308,10 +310,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             )}
             <button
               onClick={() => { setWizardOpen(true); setMobileDrawerOpen(false) }}
-              className="flex items-center gap-2 w-full h-9 px-3 rounded-[var(--radius-md)] text-[14px] font-medium text-[var(--text-default)] hover:bg-[var(--surface-1)]"
-              aria-label="Add Repair Order"
+              className="flex items-center gap-2 w-full h-9 px-3 rounded-[var(--radius-md)] text-[14px] font-semibold text-white"
+              aria-label="New Repair Order"
+              style={{ background: '#C05621' }}
             >
-              <Plus size={16} className="text-[var(--text-muted)]" /> Add Repair Order
+              <Plus size={16} /> New Repair Order
             </button>
           </div>
           <div className="border-t border-[var(--line)] p-3 flex items-center gap-3">
@@ -587,27 +590,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             </Tooltip>
           )}
-          <Tooltip title={!sidebarOpen ? 'Add RO' : ''} placement="right">
+          <Tooltip title={!sidebarOpen ? 'New RO' : ''} placement="right">
             <button
               onClick={() => setWizardOpen(true)}
-              aria-label="Add Repair Order"
+              aria-label="New Repair Order"
               className={[
                 'flex items-center h-9 rounded-[var(--radius-md)] w-full transition-all duration-[var(--motion-duration)]',
-                'text-[13px] font-medium',
+                'text-[13px] font-semibold text-white',
                 sidebarOpen ? 'gap-2.5 px-3' : 'justify-center px-0',
               ].join(' ')}
-              style={{ color: 'var(--sidebar-text)' }}
+              style={{ background: '#C05621' }}
               onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.background = 'var(--sidebar-hover)'
-                ;(e.currentTarget as HTMLElement).style.color = 'var(--sidebar-text-active)'
+                (e.currentTarget as HTMLElement).style.background = '#9C4419'
               }}
               onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.background = 'transparent'
-                ;(e.currentTarget as HTMLElement).style.color = 'var(--sidebar-text)'
+                (e.currentTarget as HTMLElement).style.background = '#C05621'
               }}
             >
-              <Plus size={16} className="shrink-0" style={{ opacity: 0.7 }} />
-              {sidebarOpen && 'Add Repair Order'}
+              <Plus size={16} className="shrink-0" />
+              {sidebarOpen && 'New Repair Order'}
             </button>
           </Tooltip>
         </div>

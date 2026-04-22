@@ -14,7 +14,7 @@ import Skeleton from '@mui/material/Skeleton'
 import Tab from '@mui/material/Tab'
 import Tabs from '@mui/material/Tabs'
 import Typography from '@mui/material/Typography'
-import { Clock, MapPin, MoveRight, X, Car, User, CalendarDays, History, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
+import { Clock, MapPin, MoveRight, X, Car, User, CalendarDays, History, ZoomIn, ZoomOut, Maximize2, Trash2 } from 'lucide-react'
 import { lotApi } from '@/api/lot'
 import type { LotCanvasPayload, SpotDetail } from '@/api/lot'
 import { LotPickerDialog } from './LotPickerDialog'
@@ -84,7 +84,7 @@ interface CanvasViewProps {
   backgroundImage?: string | null
   backgroundOpacity?: number | null
   selectedSpotId: number | null
-  onSpotClick: (spotId: number) => void
+  onSpotClick: (spotId: number, layoutId: number) => void
 }
 
 function CanvasView({ canvasData, backgroundImage, backgroundOpacity, selectedSpotId, onSpotClick }: CanvasViewProps) {
@@ -335,7 +335,7 @@ function CanvasView({ canvasData, backgroundImage, backgroundOpacity, selectedSp
                     return (
                       <Group
                         key={spot.id}
-                        onClick={() => onSpotClick(spot.id)}
+                        onClick={() => onSpotClick(spot.id, layout?.id ?? 0)}
                         onMouseEnter={(e) => setCursor(e, 'pointer')}
                         onMouseLeave={(e) => setCursor(e, 'default')}
                       >
@@ -497,15 +497,6 @@ function DetailPanel({ detail, isLoading, roId, currentSpotId, resolvedZoneName,
             </Box>
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
-                <Clock size={12} style={{ opacity: 0.45 }} />
-                <Typography sx={{ fontSize: '0.68rem', color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.07em' }}>At Shop</Typography>
-              </Box>
-              <Typography sx={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                {fmtParked(current.arrived_at_shop) ?? '—'}
-              </Typography>
-            </Box>
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
                 <CalendarDays size={12} style={{ opacity: 0.45 }} />
                 <Typography sx={{ fontSize: '0.68rem', color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Due Out</Typography>
               </Box>
@@ -525,44 +516,71 @@ function DetailPanel({ detail, isLoading, roId, currentSpotId, resolvedZoneName,
       {(canMoveHere || canUnassign) && (
         <>
           <Divider sx={{ mb: 2 }} />
-          {canMoveHere && (
-            <Button
-              variant="contained"
-              fullWidth
-              size="small"
-              startIcon={isMutating ? <CircularProgress size={14} color="inherit" /> : <MapPin size={14} />}
-              disabled={isMutating}
-              onClick={onMove}
-              sx={{ mb: 1 }}
-            >
-              Move Vehicle Here
-            </Button>
-          )}
-          {canUnassign && (
-            <Button
-              variant="outlined"
-              fullWidth
-              size="small"
-              startIcon={<MoveRight size={14} />}
-              disabled={isMutating}
-              onClick={onMoveToDifferentLot}
-              sx={{ mb: 1 }}
-            >
-              Move to Different Lot
-            </Button>
-          )}
-          {canUnassign && (
-            <Button
-              variant="outlined"
-              color="error"
-              fullWidth
-              size="small"
-              disabled={isMutating}
-              onClick={onUnassign}
-            >
-              Remove from Spot
-            </Button>
-          )}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {canMoveHere && (
+              <Button
+                variant="contained"
+                fullWidth
+                disabled={isMutating}
+                onClick={onMove}
+                startIcon={isMutating ? <CircularProgress size={13} color="inherit" /> : <MapPin size={14} />}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                  textTransform: 'none',
+                  borderRadius: '8px',
+                  py: 1,
+                  background: '#C05621',
+                  '&:hover': { background: '#9C4419' },
+                  boxShadow: 'none',
+                  '&:active': { boxShadow: 'none' },
+                }}
+              >
+                Move Vehicle Here
+              </Button>
+            )}
+            {canUnassign && (
+              <Button
+                variant="outlined"
+                fullWidth
+                disabled={isMutating}
+                onClick={onMoveToDifferentLot}
+                startIcon={<MoveRight size={14} />}
+                sx={{
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  textTransform: 'none',
+                  borderRadius: '8px',
+                  py: 1,
+                  borderColor: 'divider',
+                  color: 'text.primary',
+                  '&:hover': { borderColor: 'text.secondary', background: 'action.hover' },
+                }}
+              >
+                Move to Different Lot
+              </Button>
+            )}
+            {canUnassign && (
+              <Button
+                variant="text"
+                fullWidth
+                disabled={isMutating}
+                onClick={onUnassign}
+                startIcon={<Trash2 size={13} />}
+                sx={{
+                  fontWeight: 600,
+                  fontSize: '0.78rem',
+                  textTransform: 'none',
+                  borderRadius: '8px',
+                  py: 0.75,
+                  color: 'error.main',
+                  '&:hover': { background: 'rgba(211,47,47,0.06)' },
+                }}
+              >
+                Remove from Spot
+              </Button>
+            )}
+          </Box>
         </>
       )}
 
@@ -677,10 +695,14 @@ interface Props {
 export function LotDetailsModal({ open, onClose, shopId, initialSpotId, roId, currentSpotId, onSpotChanged }: Props) {
   const qc = useQueryClient()
   const [selectedSpotId, setSelectedSpotId] = useState<number | null>(initialSpotId ?? null)
+  const [resolvedLayoutId, setResolvedLayoutId] = useState<number | undefined>(undefined)
   const [lotPickerOpen, setLotPickerOpen] = useState(false)
 
   useEffect(() => {
-    if (open) setSelectedSpotId(initialSpotId ?? null)
+    if (open) {
+      setSelectedSpotId(initialSpotId ?? null)
+      setResolvedLayoutId(undefined)
+    }
   }, [open, initialSpotId])
 
   const { data: spotDetail, isLoading: detailLoading } = useQuery({
@@ -690,9 +712,23 @@ export function LotDetailsModal({ open, onClose, shopId, initialSpotId, roId, cu
     staleTime: 15_000,
   })
 
-  // When opened for a specific spot, use that spot's layout so we show the right lot
-  const canvasLayoutId = selectedSpotId ? spotDetail?.spot.layout_id : undefined
-  const canvasReady = !selectedSpotId || !!spotDetail
+  // Resolve layout from spotDetail (initial open path)
+  useEffect(() => {
+    if (spotDetail?.spot.layout_id != null) {
+      setResolvedLayoutId(spotDetail.spot.layout_id)
+    }
+  }, [spotDetail?.spot.layout_id])
+
+  function handleSpotClick(spotId: number, layoutId: number) {
+    setSelectedSpotId(spotId)
+    if (layoutId) setResolvedLayoutId(layoutId)
+  }
+
+  // canvasLayoutId is stable — never reverts to undefined once resolved
+  const canvasLayoutId = resolvedLayoutId
+  // Block canvas from loading stale default-layout cache while we await the correct layout
+  const isAwaitingLayout = !!selectedSpotId && resolvedLayoutId == null
+  const canvasReady = !isAwaitingLayout
 
   const { data: canvasData, isLoading: canvasLoading } = useQuery({
     queryKey: ['lot_canvas', shopId, canvasLayoutId],
@@ -764,7 +800,7 @@ export function LotDetailsModal({ open, onClose, shopId, initialSpotId, roId, cu
       <DialogContent sx={{ p: 0, display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Left — canvas */}
         <Box sx={{ flex: '0 0 70%', borderRight: '1px solid', borderColor: 'divider', overflow: 'hidden', display: 'flex', alignItems: 'flex-start' }}>
-          {canvasLoading ? (
+          {(canvasLoading || isAwaitingLayout) ? (
             <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#1a1a1a' }}>
               <CircularProgress sx={{ color: '#555' }} />
             </Box>
@@ -774,7 +810,7 @@ export function LotDetailsModal({ open, onClose, shopId, initialSpotId, roId, cu
               backgroundImage={canvasData?.layout?.background_image}
               backgroundOpacity={canvasData?.layout?.background_opacity}
               selectedSpotId={selectedSpotId}
-              onSpotClick={setSelectedSpotId}
+              onSpotClick={handleSpotClick}
             />
           ) : (
             <Box sx={{ p: 3, color: 'text.disabled' }}>

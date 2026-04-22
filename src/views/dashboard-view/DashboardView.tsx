@@ -9,7 +9,7 @@ import { formatCurrency } from '@/lib/utils'
 import NewROWizard from '@/components/NewROWizard'
 import RODetailDrawer from '@/views/customer-view/components/RODetailDrawer'
 import { PageHeader, Button, StatusPill } from '@/ui'
-import { roStatusToTone, roStatusLabel } from '@/ui/StatusPill'
+
 import {
   Activity,
   AlertCircle,
@@ -28,11 +28,6 @@ import {
 import { format, isPast, parseISO } from 'date-fns'
 import type { ReactNode } from 'react'
 
-const OPEN_STATUSES = new Set([
-  'new', 'estimate_pending', 'estimate_approved', 'pre_order',
-  'parts_ordered', 'parts_partial', 'parts_complete', 'scheduled',
-  'in_production', 'qa_check', 'detail', 'ready_for_pickup',
-])
 
 function todayStr() {
   return format(new Date(), 'yyyy-MM-dd')
@@ -215,7 +210,7 @@ function LotMap({
   const zones = useMemo(() => {
     const map = new Map<string, RepairOrderListItem[]>()
     for (const ro of ros) {
-      if (!OPEN_STATUSES.has(ro.status)) continue
+      if (ro.job_status === 'closed') continue
       const zone = ro.zone?.trim() || 'Lot'
       if (!map.has(zone)) map.set(zone, [])
       map.get(zone)!.push(ro)
@@ -250,7 +245,7 @@ function LotMap({
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {zoneRos.map(ro => {
-              const tone = roStatusToTone(ro.status)
+              const tone = jobStatusToTone(ro.job_status)
               const statusClasses: Record<string, string> = {
                 neutral: 'border-[var(--line)] bg-white',
                 success: 'border-[rgba(34,197,94,0.18)] bg-[rgba(240,253,244,0.92)]',
@@ -280,7 +275,7 @@ function LotMap({
                         {v ? `${v.year ?? ''} ${v.make ?? ''} ${v.model ?? ''}`.trim() : 'Vehicle TBD'}
                       </p>
                     </div>
-                    <StatusPill label={roStatusLabel(ro.status)} tone={tone} />
+                    <StatusPill label={JOB_STATUS_LABELS[ro.job_status ?? 'open']} tone={tone} />
                   </div>
                   <p className="mt-2 truncate text-[12px] text-[var(--text-muted)]">{customerName(ro)}</p>
                 </button>
@@ -390,7 +385,7 @@ export default function DashboardView() {
   const today = todayStr()
 
   const openRos = useMemo(
-    () => ros.filter(ro => !ro.deleted_at && OPEN_STATUSES.has(ro.status)),
+    () => ros.filter(ro => !ro.deleted_at && ro.job_status !== 'closed'),
     [ros],
   )
 
@@ -441,7 +436,7 @@ export default function DashboardView() {
     .join(' · ')
 
   const todayBlocked = useMemo(
-    () => promisedToday.filter(ro => ['estimate_pending', 'parts_ordered', 'parts_partial'].includes(ro.status)),
+    () => promisedToday.filter(ro => ro.job_status === 'open'),
     [promisedToday],
   )
 

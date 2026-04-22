@@ -405,7 +405,7 @@ export default function RepairOrdersView() {
                     const owed = owedAmount(ro)
                     const total = totalAmount(ro)
                     const out = ro.scheduled_out_date
-                    const isOverdue  = out && !['delivered', 'closed'].includes(ro.status) && isPast(parseISO(out))
+                    const isOverdue  = out && ro.job_status !== 'closed' && isPast(parseISO(out))
                     const isDueToday = out && isToday(parseISO(out))
                     const csr = ro.csr
                     const est = ro.estimator

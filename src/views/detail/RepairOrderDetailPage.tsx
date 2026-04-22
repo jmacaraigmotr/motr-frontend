@@ -1,13 +1,19 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import Dialog from '@mui/material/Dialog'
+import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
+import IconButton from '@mui/material/IconButton'
 import { repairOrdersApi } from '@/api/repairOrders'
 import type { ROAuditEntry } from '@/api/repairOrders'
 import type { Payment, RepairOrder } from '@/types/repairOrder'
 import { Button, DataTable, EmptyState, FilterPill, PageHeader, StatusPill, roStatusLabel, roStatusToTone } from '@/ui'
-import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import AddTransactionDialog from '@/views/customers-view/components/AddTransactionDialog'
-import { ArrowLeft, CreditCard, Plus } from 'lucide-react'
+import RecordHistory from '@/components/RecordHistory'
+import TransactionDetailsModal from '@/components/TransactionDetailsModal'
+import { ArrowLeft, CreditCard, Plus, X, History } from 'lucide-react'
 
 type ROTab = 'transactions' | 'intake' | 'vehicle' | 'insurance' | 'rental' | 'history'
 
@@ -32,12 +38,40 @@ function SectionCard({ title, children, action }: { title: string; children: Rea
   )
 }
 
+function TabHistory({ entries, entityType, isLoading }: { entries: ROAuditEntry[]; entityType: string; isLoading: boolean }) {
+  const filtered = entries.filter(e => e.entity_type === entityType)
+  return (
+    <SectionCard title="Record History">
+      {isLoading ? (
+        <div className="space-y-4">
+          {[1, 2].map(n => (
+            <div key={n} className="flex gap-4">
+              <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-[var(--surface-2)]" />
+              <div className="flex-1 space-y-2 pt-1">
+                <div className="h-4 w-48 animate-pulse rounded bg-[var(--surface-2)]" />
+                <div className="h-3 w-32 animate-pulse rounded bg-[var(--surface-2)]" />
+                <div className="h-14 animate-pulse rounded bg-[var(--surface-2)]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState template="no-records-yet" headline="No history yet" />
+      ) : (
+        <RecordHistory entries={filtered} />
+      )}
+    </SectionCard>
+  )
+}
+
 export default function RepairOrderDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams()
   const roId = Number(id)
   const [tab, setTab] = useState<ROTab>('transactions')
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [historyModalOpen, setHistoryModalOpen] = useState(false)
+  const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(null)
 
   const detailQuery = useQuery({
     queryKey: ['repair_order_page', roId],
@@ -56,8 +90,8 @@ export default function RepairOrderDetailPage() {
   const activityQuery = useQuery({
     queryKey: ['repair_order_activity_page', roId],
     queryFn: () => repairOrdersApi.activity(roId),
-    enabled: Number.isFinite(roId) && tab === 'history',
-    staleTime: 30_000,
+    enabled: Number.isFinite(roId),
+    staleTime: 60_000,
   })
 
   const detail = detailQuery.data
@@ -158,169 +192,200 @@ export default function RepairOrderDetailPage() {
           </div>
 
           {tab === 'transactions' && (
-            <SectionCard
-              title="Transactions"
-              action={
-                <Button variant="primary" size="sm" onClick={() => setPaymentOpen(true)} leadingIcon={<Plus size={14} />}>
-                  Record Payment
-                </Button>
-              }
-            >
-              <DataTable<Payment>
-                columns={[
-                  {
-                    key: 'date',
-                    header: 'Date',
-                    render: payment => <span className="font-mono text-[12px] text-[var(--text-muted)]">{formatDate(payment.date_added ?? payment.created_at)}</span>,
-                  },
-                  {
-                    key: 'type',
-                    header: 'Type',
-                    render: payment => payment.transaction_type?.replace(/_/g, ' ') || '—',
-                  },
-                  {
-                    key: 'amount',
-                    header: 'Amount',
-                    align: 'right',
-                    render: payment => <span className="font-mono">{formatCurrency(payment.amount)}</span>,
-                  },
-                  {
-                    key: 'status',
-                    header: 'Status',
-                    render: payment => (
-                      <StatusPill
-                        label={payment.payment_status?.replace(/_/g, ' ') || '—'}
-                        tone={payment.payment_status === 'paid' || payment.payment_status === 'approved' ? 'done' : 'waiting'}
-                      />
-                    ),
-                  },
-                ]}
-                rows={payments}
-                getRowKey={payment => payment.id}
-                emptyTemplate="no-records-yet"
-                emptyHeadline="No transactions for this RO"
-              />
-            </SectionCard>
+            <>
+              <SectionCard
+                title="Transactions"
+                action={
+                  <Button variant="primary" size="sm" onClick={() => setPaymentOpen(true)} leadingIcon={<Plus size={14} />}>
+                    Record Payment
+                  </Button>
+                }
+              >
+                <DataTable<Payment>
+                  columns={[
+                    {
+                      key: 'date',
+                      header: 'Date',
+                      render: payment => <span className="font-mono text-[12px] text-[var(--text-muted)]">{formatDate(payment.date_added ?? payment.created_at)}</span>,
+                    },
+                    {
+                      key: 'type',
+                      header: 'Type',
+                      render: payment => payment.transaction_type?.replace(/_/g, ' ') || '—',
+                    },
+                    {
+                      key: 'amount',
+                      header: 'Amount',
+                      align: 'right',
+                      render: payment => <span className="font-mono">{formatCurrency(payment.amount)}</span>,
+                    },
+                    {
+                      key: 'status',
+                      header: 'Status',
+                      render: payment => (
+                        <StatusPill
+                          label={payment.payment_status?.replace(/_/g, ' ') || '—'}
+                          tone={payment.payment_status === 'paid' || payment.payment_status === 'approved' ? 'done' : 'waiting'}
+                        />
+                      ),
+                    },
+                  ]}
+                  rows={payments}
+                  getRowKey={payment => payment.id}
+                  emptyTemplate="no-records-yet"
+                  emptyHeadline="No transactions for this RO"
+                />
+              </SectionCard>
+              <TabHistory entries={activity} entityType="payments" isLoading={activityQuery.isLoading} />
+            </>
           )}
 
           {tab === 'intake' && (
-            <SectionCard title="Intake">
-              {!intake ? (
-                <EmptyState template="no-records-yet" headline="No intake recorded" />
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {(([
-                    ['Date of loss', intake.date_of_loss],
-                    ['Mileage', intake.mileage],
-                    ['Point of impact', intake.point_of_impact],
-                    ['Driveable', intake.is_driveable ? 'Yes' : 'No'],
-                    ['Towed', intake.is_towed ? 'Yes' : 'No'],
-                    ['Previous estimate', intake.has_previous_estimate ? 'Yes' : 'No'],
-                  ]) as [string, unknown][]).map(([label, value]) => (
-                    <SummaryField key={label} label={label} value={String(value ?? '—')} />
-                  ))}
-                  {!!intake.damage_description && <div className="md:col-span-2 xl:col-span-3 rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--surface-1)] px-4 py-3 text-[14px] text-[var(--text-default)]">{String(intake.damage_description)}</div>}
-                </div>
-              )}
-            </SectionCard>
+            <>
+              <SectionCard title="Intake">
+                {!intake ? (
+                  <EmptyState template="no-records-yet" headline="No intake recorded" />
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {(([
+                      ['Date of loss', intake.date_of_loss],
+                      ['Mileage', intake.mileage],
+                      ['Point of impact', intake.point_of_impact],
+                      ['Driveable', intake.is_driveable ? 'Yes' : 'No'],
+                      ['Towed', intake.is_towed ? 'Yes' : 'No'],
+                      ['Previous estimate', intake.has_previous_estimate ? 'Yes' : 'No'],
+                    ]) as [string, unknown][]).map(([label, value]) => (
+                      <SummaryField key={label} label={label} value={String(value ?? '—')} />
+                    ))}
+                    {!!intake.damage_description && <div className="md:col-span-2 xl:col-span-3 rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--surface-1)] px-4 py-3 text-[14px] text-[var(--text-default)]">{String(intake.damage_description)}</div>}
+                  </div>
+                )}
+              </SectionCard>
+              <TabHistory entries={activity} entityType="intakes" isLoading={activityQuery.isLoading} />
+            </>
           )}
 
           {tab === 'vehicle' && (
-            <SectionCard title="Vehicle">
-              {!vehicle ? (
-                <EmptyState template="no-records-yet" headline="No vehicle linked" />
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {[
-                    ['Vehicle', vehicleLabel],
-                    ['Color', vehicle.color || '—'],
-                    ['VIN', vehicle.vin || '—'],
-                    ['Plate', vehicle.license_plate || '—'],
-                    ['Arrived', formatDate(ro.arrived_at)],
-                    ['Lot position', ro.zone || '—'],
-                  ].map(([label, value]) => (
-                    <SummaryField key={label} label={label} value={value} />
-                  ))}
-                </div>
-              )}
-            </SectionCard>
+            <>
+              <SectionCard title="Vehicle">
+                {!vehicle ? (
+                  <EmptyState template="no-records-yet" headline="No vehicle linked" />
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {[
+                      ['Vehicle', vehicleLabel],
+                      ['Color', vehicle.color || '—'],
+                      ['VIN', vehicle.vin || '—'],
+                      ['Plate', vehicle.license_plate || '—'],
+                      ['Arrived', formatDate(ro.arrived_at)],
+                      ['Lot position', ro.zone || '—'],
+                    ].map(([label, value]) => (
+                      <SummaryField key={label} label={label} value={value} />
+                    ))}
+                  </div>
+                )}
+              </SectionCard>
+              <TabHistory entries={activity} entityType="vehicles" isLoading={activityQuery.isLoading} />
+            </>
           )}
 
           {tab === 'insurance' && (
-            <SectionCard title="Insurance">
-              {!insurance ? (
-                <EmptyState template="no-records-yet" headline="No insurance data" />
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {Object.entries({
-                    'First Party': insurance.first_party_company,
-                    'Claim #': insurance.first_party_claim_number,
-                    'Rep': insurance.first_party_rep_name,
-                    'Third Party': insurance.third_party_company,
-                    'Third-party Claim #': insurance.third_party_claim_number,
-                    'Liability %': insurance.liability_percentage,
-                  }).map(([label, value]) => (
-                    <SummaryField key={label} label={label} value={String(value ?? '—')} />
-                  ))}
-                </div>
-              )}
-            </SectionCard>
+            <>
+              <SectionCard title="Insurance">
+                {!insurance ? (
+                  <EmptyState template="no-records-yet" headline="No insurance data" />
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {Object.entries({
+                      'First Party': insurance.first_party_company,
+                      'Claim #': insurance.first_party_claim_number,
+                      'Rep': insurance.first_party_rep_name,
+                      'Third Party': insurance.third_party_company,
+                      'Third-party Claim #': insurance.third_party_claim_number,
+                      'Liability %': insurance.liability_percentage,
+                    }).map(([label, value]) => (
+                      <SummaryField key={label} label={label} value={String(value ?? '—')} />
+                    ))}
+                  </div>
+                )}
+              </SectionCard>
+              <TabHistory entries={activity} entityType="ro_insurance" isLoading={activityQuery.isLoading} />
+            </>
           )}
 
           {tab === 'rental' && (
-            <SectionCard title="Rental">
-              {!rental ? (
-                <EmptyState template="no-records-yet" headline="No rental data" />
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {Object.entries({
-                    'Company': rental.rental_company,
-                    'Approved Daily': rental.approved_daily_amount != null ? formatCurrency(Number(rental.approved_daily_amount)) : '—',
-                    'Days on Policy': rental.days_on_policy,
-                    'Start Date': rental.rental_start_date ? formatDate(String(rental.rental_start_date)) : '—',
-                    'Due Date': rental.rental_due_date ? formatDate(String(rental.rental_due_date)) : '—',
-                    'Reservation #': rental.reservation_number,
-                  }).map(([label, value]) => (
-                    <SummaryField key={label} label={label} value={String(value ?? '—')} />
-                  ))}
-                </div>
-              )}
-            </SectionCard>
+            <>
+              <SectionCard title="Rental">
+                {!rental ? (
+                  <EmptyState template="no-records-yet" headline="No rental data" />
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {Object.entries({
+                      'Company': rental.rental_company,
+                      'Approved Daily': rental.approved_daily_amount != null ? formatCurrency(Number(rental.approved_daily_amount)) : '—',
+                      'Days on Policy': rental.days_on_policy,
+                      'Start Date': rental.rental_start_date ? formatDate(String(rental.rental_start_date)) : '—',
+                      'Due Date': rental.rental_due_date ? formatDate(String(rental.rental_due_date)) : '—',
+                      'Reservation #': rental.reservation_number,
+                    }).map(([label, value]) => (
+                      <SummaryField key={label} label={label} value={String(value ?? '—')} />
+                    ))}
+                  </div>
+                )}
+              </SectionCard>
+              <TabHistory entries={activity} entityType="rentals" isLoading={activityQuery.isLoading} />
+            </>
           )}
 
           {tab === 'history' && (
-            <SectionCard title="History">
+            <SectionCard
+              title="Record History"
+              action={
+                !activityQuery.isLoading && (activity.length > 0 || events.length > 0) ? (
+                  <button
+                    onClick={() => setHistoryModalOpen(true)}
+                    className="flex items-center gap-1.5 text-[12px] font-medium text-[var(--accent)] hover:underline"
+                  >
+                    <History size={13} />
+                    View Full History
+                  </button>
+                ) : undefined
+              }
+            >
               {activityQuery.isLoading ? (
-                <div className="h-8 w-32 animate-pulse rounded bg-[var(--surface-2)]" />
+                <div className="space-y-4">
+                  {[1, 2, 3].map(n => (
+                    <div key={n} className="flex gap-4">
+                      <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-[var(--surface-2)]" />
+                      <div className="flex-1 space-y-2 pt-1">
+                        <div className="h-4 w-48 animate-pulse rounded bg-[var(--surface-2)]" />
+                        <div className="h-3 w-32 animate-pulse rounded bg-[var(--surface-2)]" />
+                        <div className="h-16 animate-pulse rounded bg-[var(--surface-2)]" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : activity.length === 0 && events.length === 0 ? (
                 <EmptyState template="no-records-yet" headline="No history yet" />
               ) : (
-                <div className="space-y-4">
-                  {[
-                    ...activity.map(item => ({
-                      id: `audit-${item.id}`,
-                      when: item.created_at,
-                      title: item.description || item.action_type,
-                      body: item.user?.name || item.user?.email || item.entity_name,
+                <RecordHistory
+                  ro={{ job_number: ro.job_number, ro_number: ro.ro_number }}
+                  onPaymentClick={setSelectedPaymentId}
+                  entries={[
+                    ...activity,
+                    ...events.map(evt => ({
+                      id: evt.id,
+                      created_at: evt.created_at,
+                      action_type: 'update' as const,
+                      entity_type: 'repair_orders',
+                      entity_name: ro.ro_number,
+                      description: evt.description,
+                      old_values: null,
+                      new_values: null,
+                      user: null,
                     })),
-                    ...events.map(item => ({
-                      id: `event-${item.id}`,
-                      when: item.created_at,
-                      title: item.description || 'Event',
-                      body: null,
-                    })),
-                  ]
-                    .sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime())
-                    .map(item => (
-                      <div key={item.id} className="grid gap-1 border-b border-[var(--line)] pb-4 last:border-b-0 last:pb-0 md:grid-cols-[180px_1fr]">
-                        <div className="font-mono text-[12px] text-[var(--text-muted)]">{formatDateTime(item.when)}</div>
-                        <div>
-                          <div className="text-[14px] font-medium text-[var(--text-strong)]">{item.title}</div>
-                          {item.body && <div className="mt-1 text-[13px] text-[var(--text-muted)]">{item.body}</div>}
-                        </div>
-                      </div>
-                    ))}
-                </div>
+                  ]}
+                />
               )}
             </SectionCard>
           )}
@@ -345,6 +410,56 @@ export default function RepairOrderDetailPage() {
           onSaved={() => setPaymentOpen(false)}
         />
       )}
+
+      <Dialog
+        open={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 'var(--radius-lg)', maxHeight: '90vh' } }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+          <div>
+            <div className="text-[16px] font-semibold text-[var(--text-strong)]">Full History</div>
+            <div className="text-[13px] text-[var(--text-muted)]">
+              {ro.job_number ? `Job #${ro.job_number}` : ro.ro_number}
+              {ro.job_number && ro.ro_number && <span className="ml-2 opacity-60">{ro.ro_number}</span>}
+            </div>
+          </div>
+          <IconButton size="small" onClick={() => setHistoryModalOpen(false)}>
+            <X size={16} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 3 }}>
+          {activity.length === 0 && events.length === 0 ? (
+            <EmptyState template="no-records-yet" headline="No history yet" />
+          ) : (
+            <RecordHistory
+              ro={{ job_number: ro.job_number, ro_number: ro.ro_number }}
+              onPaymentClick={setSelectedPaymentId}
+              entries={[
+                ...activity,
+                ...events.map(evt => ({
+                  id: evt.id,
+                  created_at: evt.created_at,
+                  action_type: 'update' as const,
+                  entity_type: 'repair_orders',
+                  entity_name: ro.ro_number,
+                  description: evt.description,
+                  old_values: null,
+                  new_values: null,
+                  user: null,
+                })),
+              ]}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <TransactionDetailsModal
+        payment={payments.find(p => p.id === selectedPaymentId) ?? null}
+        onClose={() => setSelectedPaymentId(null)}
+      />
     </div>
   )
 }

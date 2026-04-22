@@ -563,6 +563,9 @@ function RODetailsStep({ customer, vehicle, onSuccess, onBack }: {
       if (shop?.id) {
         qc.invalidateQueries({ queryKey: ['lot_layouts_active', shop.id] })
         qc.invalidateQueries({ queryKey: ['lot_zones_spots'] })
+        qc.invalidateQueries({ queryKey: ['lot_canvas', shop.id] })
+        qc.invalidateQueries({ queryKey: ['lot_spot_detail'] })
+        qc.invalidateQueries({ queryKey: ['lot_locations'] })
       }
       showToast(`Repair order ${ro.ro_number} created`)
       onSuccess(ro.ro_number, ro.id)

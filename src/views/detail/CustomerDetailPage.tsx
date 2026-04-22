@@ -4,15 +4,16 @@ import { useQuery } from '@tanstack/react-query'
 import { customersApi } from '@/api/customers'
 import { repairOrdersApi } from '@/api/repairOrders'
 import { teamApi } from '@/api/team'
-import type { Customer, CustomerHistory } from '@/types/customer'
+import type { Customer } from '@/types/customer'
 import type { PaymentWithContext, RepairOrderListItem } from '@/types/repairOrder'
 import type { Vehicle } from '@/types/vehicle'
 import { Avatar, Button, DataTable, EmptyState, FilterPill, PageHeader, StatusPill, roStatusLabel, roStatusToTone } from '@/ui'
-import { formatCurrency, formatDate, formatDateTime, initials } from '@/lib/utils'
+import { formatCurrency, formatDate, initials } from '@/lib/utils'
 import NewROWizard from '@/components/NewROWizard'
 import CustomerEditDialog from '@/views/customers-view/components/CustomerEditDialog'
 import AddVehicleDialog from '@/views/customers-view/components/AddVehicleDialog'
 import AddTransactionDialog from '@/views/customers-view/components/AddTransactionDialog'
+import RecordHistory from '@/components/RecordHistory'
 import { useAuth } from '@/hooks/useAuth'
 import { ArrowLeft, Car, CreditCard, FileText, History, Mail, Phone, Plus } from 'lucide-react'
 
@@ -79,9 +80,9 @@ export default function CustomerDetailPage() {
     staleTime: 30_000,
   })
 
-  const historyQuery = useQuery({
-    queryKey: ['customer_history_page', customerId],
-    queryFn: () => customersApi.history(customerId),
+  const activityQuery = useQuery({
+    queryKey: ['customer_activity_page', customerId],
+    queryFn: () => customersApi.activity(customerId),
     enabled: Number.isFinite(customerId) && tab === 'history',
     staleTime: 60_000,
   })
@@ -106,7 +107,7 @@ export default function CustomerDetailPage() {
   const openRos = detail?.open_ros ?? []
   const documents = detail?.documents ?? []
   const payments = (paymentsQuery.data?.data ?? []) as PaymentWithContext[]
-  const history = historyQuery.data as CustomerHistory | undefined
+  const activityEntries = activityQuery.data ?? []
 
   const assignedCSR = useMemo(() => {
     if (!customer?.assigned_csr_id) return null
@@ -120,30 +121,6 @@ export default function CustomerDetailPage() {
     .filter(payment => payment.payment_status === 'not_paid')
     .reduce((sum, payment) => sum + payment.amount, 0)
 
-  const historyItems = useMemo(() => {
-    if (!history) return []
-
-    return [
-      ...history.ro_events.map(evt => ({
-        id: `ro-${evt.id}`,
-        when: evt.created_at,
-        title: evt.description || 'Repair order event',
-        body: evt.metadata?.note ? String(evt.metadata.note) : null,
-      })),
-      ...history.customer_interactions.map(evt => ({
-        id: `interaction-${evt.id}`,
-        when: evt.created_at,
-        title: evt.subject || evt.type.replace(/_/g, ' '),
-        body: evt.body,
-      })),
-      ...history.payments.map(evt => ({
-        id: `payment-${evt.id}`,
-        when: evt.created_at ?? '',
-        title: `Payment ${formatCurrency(evt.amount)}`,
-        body: evt.notes ?? evt.reference_number ?? null,
-      })),
-    ].sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime())
-  }, [history])
 
   if (customerQuery.isLoading) {
     return (
@@ -231,7 +208,7 @@ export default function CustomerDetailPage() {
             <FilterPill label="Overview" selected={tab === 'overview'} onClick={() => setTab('overview')} />
             <FilterPill label="Vehicles" selected={tab === 'vehicles'} count={vehicles.length} onClick={() => setTab('vehicles')} />
             <FilterPill label="Transactions" selected={tab === 'transactions'} count={payments.length} onClick={() => setTab('transactions')} />
-            <FilterPill label="History" selected={tab === 'history'} count={historyItems.length || undefined} onClick={() => setTab('history')} />
+            <FilterPill label="History" selected={tab === 'history'} count={activityEntries.length || undefined} onClick={() => setTab('history')} />
           </div>
 
           {tab === 'overview' && (
@@ -415,23 +392,24 @@ export default function CustomerDetailPage() {
 
           {tab === 'history' && (
             <div className="rounded-[var(--radius-lg)] border border-[var(--line)] bg-white p-5">
-              <div className="mb-4 text-[12px] font-medium uppercase tracking-[0.04em] text-[var(--text-muted)]">Customer history</div>
-              {historyQuery.isLoading ? (
-                <div className="h-8 w-32 animate-pulse rounded bg-[var(--surface-2)]" />
-              ) : historyItems.length === 0 ? (
-                <EmptyState template="no-records-yet" headline="No history yet" />
-              ) : (
+              <div className="mb-4 text-[12px] font-medium uppercase tracking-[0.04em] text-[var(--text-muted)]">Record History</div>
+              {activityQuery.isLoading ? (
                 <div className="space-y-4">
-                  {historyItems.map(item => (
-                    <div key={item.id} className="grid gap-1 border-b border-[var(--line)] pb-4 last:border-b-0 last:pb-0 md:grid-cols-[180px_1fr]">
-                      <div className="font-mono text-[12px] text-[var(--text-muted)]">{formatDateTime(item.when)}</div>
-                      <div>
-                        <div className="text-[14px] font-medium text-[var(--text-strong)]">{item.title}</div>
-                        {item.body && <div className="mt-1 text-[13px] text-[var(--text-muted)]">{item.body}</div>}
+                  {[1, 2, 3].map(n => (
+                    <div key={n} className="flex gap-4">
+                      <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-[var(--surface-2)]" />
+                      <div className="flex-1 space-y-2 pt-1">
+                        <div className="h-4 w-48 animate-pulse rounded bg-[var(--surface-2)]" />
+                        <div className="h-3 w-32 animate-pulse rounded bg-[var(--surface-2)]" />
+                        <div className="h-16 animate-pulse rounded bg-[var(--surface-2)]" />
                       </div>
                     </div>
                   ))}
                 </div>
+              ) : activityEntries.length === 0 ? (
+                <EmptyState template="no-records-yet" headline="No history yet" />
+              ) : (
+                <RecordHistory entries={activityEntries} />
               )}
             </div>
           )}

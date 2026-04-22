@@ -108,6 +108,9 @@ export default function AddVehicleDialog({ vehicle, customer, onClose, onSaved }
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['vehicles', customerId] })
       qc.invalidateQueries({ queryKey: ['customers_table'] })
+      qc.invalidateQueries({ queryKey: ['repair_order_activity'] })
+      qc.invalidateQueries({ queryKey: ['repair_order_activity_page'] })
+      qc.invalidateQueries({ queryKey: ['repair_order_detail'] })
       showToast(isEdit ? 'Vehicle updated' : 'Vehicle added')
       onSaved()
     },

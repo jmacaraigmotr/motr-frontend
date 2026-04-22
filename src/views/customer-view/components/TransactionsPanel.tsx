@@ -10,7 +10,7 @@ import type {
   PaymentStatus,
 } from '@/types/repairOrder'
 import { TRANSACTION_TYPES, PAYMENT_STATUSES } from '@/lib/transactionConstants'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 import TransactionDetailsModal from '@/components/TransactionDetailsModal'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -27,7 +27,6 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
-import Paper from '@mui/material/Paper'
 import Chip from '@mui/material/Chip'
 import Tooltip from '@mui/material/Tooltip'
 import { Plus, Trash2, DollarSign, X, Edit } from 'lucide-react'
@@ -111,6 +110,8 @@ export default function TransactionsPanel({ roId }: Props) {
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['payments', roId] })
     qc.invalidateQueries({ queryKey: ['repair_order_detail', roId] })
+    qc.invalidateQueries({ queryKey: ['repair_order_activity', roId] })
+    qc.invalidateQueries({ queryKey: ['repair_order_activity_page', roId] })
     qc.invalidateQueries({ queryKey: ['transactions_all'] })
     qc.invalidateQueries({ queryKey: ['repair_orders_list'] })
   }
@@ -231,7 +232,7 @@ export default function TransactionsPanel({ roId }: Props) {
       </Box>
 
       {/* Payment modal */}
-      <Dialog open={formOpen} onClose={closeForm} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 3 } }}>
+      <Dialog open={formOpen} onClose={closeForm} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 3 } }} sx={{ zIndex: 1500 }}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ p: 0.875, bgcolor: 'success.main', borderRadius: 1.5, display: 'flex', color: '#fff' }}>
@@ -239,7 +240,7 @@ export default function TransactionsPanel({ roId }: Props) {
             </Box>
             <Box>
               <Typography component="div" variant="subtitle2" fontWeight={700}>
-                {isEditing ? 'Edit Payment' : 'Record Transaction'}
+                {isEditing ? 'Edit Transaction' : 'Record Transaction'}
               </Typography>
               <Typography component="div" variant="caption" color="text.secondary">
                 {isEditing ? 'Update the transaction details for this repair order.' : 'Add a transaction to this repair order.'}
@@ -399,116 +400,120 @@ export default function TransactionsPanel({ roId }: Props) {
           No payments recorded yet. Use "Record Transaction" to log a transaction.
         </Typography>
       ) : (
-        <Stack spacing={1.5}>
+        <Stack spacing={1}>
           {(payments as Payment[]).map((payment) => {
             const txType    = TRANSACTION_TYPES.find(t => t.value === payment.transaction_type)
             const status    = PAYMENT_STATUSES.find(s => s.value === payment.payment_status)
-            const dateLabel = payment.date_added ? formatDate(payment.date_added) : formatDate(payment.created_at)
+            const dateLabel = formatDateTime(payment.date_added ?? payment.created_at)
             const employee  = payment.received_by_user
               ? `${payment.received_by_user.first_name} ${payment.received_by_user.last_name}`.trim()
               : null
 
             return (
-              <Paper
+              <Box
                 key={payment.id}
-                variant="outlined"
                 onClick={() => setDetailPayment(payment)}
                 sx={{
-                  borderRadius: 2, cursor: 'pointer', overflow: 'hidden',
-                  borderColor: txType ? `${txType.color}44` : 'divider',
-                  transition: 'border-color 0.15s, background-color 0.15s',
-                  '&:hover': { borderColor: txType ? txType.color : 'primary.main', bgcolor: 'action.hover' },
+                  border: '1px solid',
+                  borderColor: txType ? `${txType.color}55` : 'divider',
+                  borderLeft: '3px solid',
+                  borderLeftColor: txType ? txType.color : 'divider',
+                  borderRadius: 2,
+                  px: 1.75, py: 1.25,
+                  cursor: 'pointer',
+                  transition: 'background-color 0.12s, border-color 0.12s',
+                  '&:hover': { bgcolor: 'action.hover', borderColor: txType ? txType.color : 'primary.main' },
+                  '&:hover .tx-actions': { opacity: 1 },
                 }}
               >
-                {/* Top accent bar */}
-                {txType && (
-                  <Box sx={{ height: 3, bgcolor: txType.color, opacity: 0.7 }} />
-                )}
-
-                <Box sx={{ p: 1.5 }}>
-                  {/* Row 1: amount + type + status + actions */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', minWidth: 0 }}>
-                      <Typography sx={{ fontSize: '1.05rem', fontWeight: 800, letterSpacing: '-0.01em' }}>
-                        {formatCurrency(payment.amount)}
+                {/* Row 1: amount + chips + actions */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 0.75 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Typography sx={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
+                      {formatCurrency(payment.amount)}
+                    </Typography>
+                    {txType && (
+                      <Box component="span" sx={{
+                        px: 1.1, py: 0.2, borderRadius: 5,
+                        fontSize: '0.69rem', fontWeight: 700,
+                        bgcolor: `${txType.color}20`, color: txType.color,
+                      }}>
+                        {txType.label}
+                      </Box>
+                    )}
+                    {status && (
+                      <Box component="span" sx={{
+                        px: 1.1, py: 0.2, borderRadius: 5,
+                        fontSize: '0.69rem', fontWeight: 700,
+                        bgcolor: `${status.color}18`, color: status.color,
+                      }}>
+                        {status.label}
+                      </Box>
+                    )}
+                    {payment.transaction_type === 'deductible' && payment.insurance_total ? (
+                      <Typography component="span" sx={{ fontSize: '0.72rem', color: 'text.secondary' }}>
+                        DED: <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>{formatCurrency(payment.insurance_total)}</Box>
                       </Typography>
-                      {txType && (
-                        <Box component="span" sx={{
-                          px: 1.1, py: 0.15, borderRadius: 5,
-                          fontSize: '0.7rem', fontWeight: 700,
-                          bgcolor: `${txType.color}22`, color: txType.color,
-                          whiteSpace: 'nowrap',
-                        }}>
-                          {txType.label}
-                        </Box>
-                      )}
-                      {status && (
-                        <Box component="span" sx={{
-                          px: 1.1, py: 0.15, borderRadius: 5,
-                          fontSize: '0.7rem', fontWeight: 700,
-                          bgcolor: `${status.color}18`, color: status.color,
-                          whiteSpace: 'nowrap',
-                        }}>
-                          {status.label}
-                        </Box>
-                      )}
-                    </Box>
-                    <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
-                      <Tooltip title="Edit">
-                        <IconButton size="small" onClick={() => openEditForm(payment)} sx={{ opacity: 0.5, '&:hover': { opacity: 1 } }}>
-                          <Edit size={14} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete">
-                        <IconButton size="small" color="error" onClick={() => setDeleteTarget(payment)} sx={{ opacity: 0.5, '&:hover': { opacity: 1 } }}>
-                          <Trash2 size={14} />
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
+                    ) : null}
                   </Box>
+                  <Stack
+                    className="tx-actions"
+                    direction="row" spacing={0.25}
+                    sx={{ flexShrink: 0, opacity: 0, transition: 'opacity 0.12s' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Tooltip title="Edit">
+                      <IconButton size="small" onClick={() => openEditForm(payment)}>
+                        <Edit size={13} />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Delete">
+                      <IconButton size="small" color="error" onClick={() => setDeleteTarget(payment)}>
+                        <Trash2 size={13} />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </Box>
 
-                  {/* Row 2: meta pills */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 1, flexWrap: 'wrap' }}>
-                    <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{dateLabel}</Typography>
-                    {payment.transaction_type === 'deductible' && (
-                      <>
-                        <Box sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
-                        <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                          Ins. DED:{' '}
-                          <Box component="span" sx={{ fontWeight: 700, color: payment.insurance_total ? 'text.primary' : 'text.disabled' }}>
-                            {payment.insurance_total ? formatCurrency(payment.insurance_total) : '—'}
-                          </Box>
-                        </Typography>
-                      </>
-                    )}
-                    {payment.transaction_type === 'employee' && employee && (
-                      <>
-                        <Box sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
-                        <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                          {employee}
-                        </Typography>
-                      </>
-                    )}
-                    {(payment.total_events ?? 0) > 0 && (
-                      <>
-                        <Box sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: 'text.disabled', flexShrink: 0 }} />
-                        <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                          {payment.total_events} note{payment.total_events !== 1 ? 's' : ''}
-                        </Typography>
-                      </>
-                    )}
+                {/* Row 2: Added By · Added At · notes count */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                  <Box>
+                    <Typography sx={{ fontSize: '0.62rem', fontWeight: 600, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Added By
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: employee ? 'text.primary' : 'text.disabled' }}>
+                      {employee ?? '—'}
+                    </Typography>
                   </Box>
-
-                  {/* Notes */}
-                  {payment.notes && (
-                    <Box sx={{ mt: 1, px: 1.25, py: 0.75, borderRadius: 1.5, bgcolor: 'action.hover', borderLeft: '3px solid', borderLeftColor: txType ? txType.color : 'divider' }}>
-                      <Typography sx={{ fontSize: '0.78rem', color: 'text.secondary', fontStyle: 'italic' }}>
-                        {payment.notes}
+                  <Box>
+                    <Typography sx={{ fontSize: '0.62rem', fontWeight: 600, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Added At
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.78rem', fontWeight: 600 }}>
+                      {dateLabel}
+                    </Typography>
+                  </Box>
+                  {(payment.total_events ?? 0) > 0 && (
+                    <Box>
+                      <Typography sx={{ fontSize: '0.62rem', fontWeight: 600, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        Notes
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.78rem', fontWeight: 600 }}>
+                        {payment.total_events}
                       </Typography>
                     </Box>
                   )}
                 </Box>
-              </Paper>
+
+                {/* Notes preview */}
+                {payment.notes && (
+                  <Box sx={{ mt: 1, px: 1.25, py: 0.6, borderRadius: 1, bgcolor: 'action.hover', borderLeft: '2px solid', borderLeftColor: txType ? `${txType.color}88` : 'divider' }}>
+                    <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', fontStyle: 'italic' }} noWrap>
+                      {payment.notes}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
             )
           })}
         </Stack>
@@ -517,6 +522,8 @@ export default function TransactionsPanel({ roId }: Props) {
       <TransactionDetailsModal
         payment={detailPayment}
         onClose={() => setDetailPayment(null)}
+        onEdit={(payment) => { openEditForm(payment) }}
+        onDelete={(payment) => { setDetailPayment(null); setDeleteTarget(payment) }}
       />
 
       <Dialog

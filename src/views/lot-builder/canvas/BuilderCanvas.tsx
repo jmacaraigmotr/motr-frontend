@@ -518,6 +518,7 @@ export default function BuilderCanvas({ readonly = false }: BuilderCanvasProps) 
               selected={selectedTempId === zone.tempId}
               readonly={readonly}
               locked={zonesLocked}
+              suppressLabel={toolMode === 'place-spot' || toolMode === 'draw-spot-poly'}
               onSelect={() => setSelected(zone.tempId)}
               onUpdate={(updates) => updateZone(zone.tempId, updates)}
               onDblClick={() => openRename(zone)}

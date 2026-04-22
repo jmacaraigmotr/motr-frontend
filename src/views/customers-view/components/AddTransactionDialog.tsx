@@ -288,6 +288,9 @@ export default function AddTransactionDialog({ customer: customerProp, preselect
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payments', effectiveRoId] })
+      qc.invalidateQueries({ queryKey: ['repair_order_payments_page', effectiveRoId] })
+      qc.invalidateQueries({ queryKey: ['repair_order_activity', effectiveRoId] })
+      qc.invalidateQueries({ queryKey: ['repair_order_activity_page', effectiveRoId] })
       qc.invalidateQueries({ queryKey: ['transactions_all'] })
       qc.invalidateQueries({ queryKey: ['customer_ros'] })
       qc.invalidateQueries({ queryKey: ['repair_orders'] })

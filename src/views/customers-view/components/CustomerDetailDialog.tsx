@@ -23,6 +23,7 @@ import TransactionDetailsModal from '@/components/TransactionDetailsModal'
 import VehicleDetailDialog from './VehicleDetailDialog'
 import NewROWizard from '@/components/NewROWizard'
 import CSRDetailDialog from '@/components/CSRDetailDialog'
+import RecordHistory from '@/components/RecordHistory'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -49,7 +50,7 @@ import Divider from '@mui/material/Divider'
 import {
   X, Pencil, Plus, Phone, Mail, MapPin, Car, FileText,
   ClipboardList, CreditCard, History,
-  DollarSign, IdCard, ExternalLink, FolderOpen, Receipt,
+  DollarSign, IdCard, ExternalLink, FolderOpen, Receipt, Archive,
 } from 'lucide-react'
 
 // ─── Tab Panel ────────────────────────────────────────────────────────────────
@@ -867,106 +868,20 @@ function CustomerHistoryTab({ customerId, customerName, enabled, teamMembers = [
     enabled,
   })
 
-  const sorted = [...entries].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  )
-
   if (isLoading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress size={24} /></Box>
   }
 
-  if (!sorted.length) {
+  if (!entries.length) {
     return (
       <Box sx={{ py: 6, textAlign: 'center' }}>
         <History size={28} style={{ opacity: 0.18, marginBottom: 8 }} />
-        <Typography sx={{ color: 'text.disabled', fontSize: '0.9rem' }}>No activity recorded yet.</Typography>
+        <Typography sx={{ color: 'text.disabled', fontSize: '0.9rem' }}>No history recorded yet.</Typography>
       </Box>
     )
   }
 
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-      {sorted.map((entry, idx) => {
-        const dot = ACTION_DOT[entry.action_type] ?? ENTITY_DOT[entry.entity_type] ?? '#94A3B8'
-        // Prefer first_name + last_name over the `name` field (which may be "system")
-        const actor = entry.user
-          ? ([entry.user.first_name, entry.user.last_name].filter(Boolean).join(' ') || entry.user.name || entry.user_email || 'System')
-          : (entry.user_email ?? 'System')
-        const actionText = buildActivityText(entry, customerName)
-        const isLast = idx === sorted.length - 1
-        const isClickable = Boolean(entry.user?.id)
-        const isROEntry = entry.entity_type === 'repair_orders' && entry.entity_id != null && onSelectRO
-
-        return (
-          <Box key={entry.id} sx={{ display: 'flex', gap: 2 }}>
-            {/* Timeline spine */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 18, flexShrink: 0 }}>
-              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: dot, mt: 1.4, flexShrink: 0 }} />
-              {!isLast && <Box sx={{ width: 2, flex: 1, bgcolor: 'divider', mt: 0.5 }} />}
-            </Box>
-
-            {/* Content */}
-            <Box sx={{ flex: 1, minWidth: 0, pb: 2.5 }}>
-              {/* Actor line */}
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.2 }}>
-                <Typography sx={{ fontSize: '0.875rem', lineHeight: 1.4 }}>
-                  <Box
-                    component="span"
-                    sx={{
-                      fontWeight: 700,
-                      cursor: isClickable ? 'pointer' : 'default',
-                      borderBottom: isClickable ? '1px dotted' : 'none',
-                      borderColor: 'text.secondary',
-                      '&:hover': isClickable ? { color: 'primary.main', borderColor: 'primary.main' } : {},
-                    }}
-                    onClick={isClickable ? () => setCsrDetailId(entry.user!.id) : undefined}
-                  >
-                    {actor}
-                  </Box>
-                  {' '}
-                  <Box
-                    component="span"
-                    sx={{
-                      color: isROEntry ? 'primary.main' : 'text.secondary',
-                      cursor: isROEntry ? 'pointer' : 'default',
-                      fontWeight: isROEntry ? 600 : 'inherit',
-                      borderBottom: isROEntry ? '1px dotted' : 'none',
-                      borderColor: 'primary.main',
-                      '&:hover': isROEntry ? { opacity: 0.75 } : {},
-                    }}
-                    onClick={isROEntry ? () => onSelectRO!(entry.entity_id!) : undefined}
-                  >
-                    {actionText}
-                  </Box>
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <Typography sx={{ fontSize: '0.72rem', color: 'text.disabled' }}>{formatDateTime(entry.created_at)}</Typography>
-                  <Typography sx={{ fontSize: '0.72rem', color: 'text.disabled' }}>·</Typography>
-                  <Typography sx={{ fontSize: '0.72rem', color: 'text.disabled' }}>
-                    {(() => { try { return formatDistanceToNow(new Date(entry.created_at), { addSuffix: true }) } catch { return '' } })()}
-                  </Typography>
-                </Box>
-              </Box>
-
-              {/* Description if any */}
-              {entry.description && (
-                <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', mt: 0.2 }}>
-                  {entry.description}
-                </Typography>
-              )}
-
-              {/* Changed fields diff for updates */}
-              {entry.action_type === 'update' && (
-                <ChangedFields oldVals={entry.old_values as Record<string, unknown> | null} newVals={entry.new_values as Record<string, unknown> | null} teamMembers={teamMembers} companies={companies} onMemberClick={setCsrDetailId} />
-              )}
-            </Box>
-          </Box>
-        )
-      })}
-
-      <CSRDetailDialog memberId={csrDetailId} onClose={() => setCsrDetailId(null)} />
-    </Box>
-  )
+  return <RecordHistory entries={entries} />
 }
 
 // ─── Documents Tab ────────────────────────────────────────────────────────────
@@ -1078,14 +993,25 @@ interface Props {
   onClose: () => void
   onEdit: (c: Customer) => void
   onNewRO: (c: Customer) => void
+  zIndex?: number
 }
 
-export default function CustomerDetailDialog({ customer, onClose, onEdit, onNewRO }: Props) {
+export default function CustomerDetailDialog({ customer, onClose, onEdit, onNewRO, zIndex }: Props) {
   const [tab, setTab] = useState(0)
   const [selectedROId, setSelectedROId] = useState<number | null>(null)
   const [csrDetailId, setCsrDetailId] = useState<number | null>(null)
+  const [archiveConfirm, setArchiveConfirm] = useState(false)
 
   const { shop } = useAuth()
+  const qc = useQueryClient()
+
+  const archiveMut = useMutation({
+    mutationFn: () => customersApi.delete(customer.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customers_table'] })
+      onClose()
+    },
+  })
 
   // Fetch team members to resolve CSR name from assigned_csr_id (also used in history tab)
   const { data: teamMembers = [] } = useQuery({
@@ -1142,7 +1068,7 @@ export default function CustomerDetailDialog({ customer, onClose, onEdit, onNewR
 
   return (
     <>
-      <Dialog open fullWidth maxWidth="lg" onClose={onClose} PaperProps={{ 'data-tour-id': 'customer-detail-dialog', sx: { height: '90vh', display: 'flex', flexDirection: 'column', borderRadius: 3, borderTop: '3px solid', borderTopColor: 'primary.main' } }}>
+      <Dialog open fullWidth maxWidth="lg" onClose={onClose} sx={zIndex != null ? { zIndex } : undefined} PaperProps={{ 'data-tour-id': 'customer-detail-dialog', sx: { height: '90vh', display: 'flex', flexDirection: 'column', borderRadius: 3, borderTop: '3px solid', borderTopColor: 'primary.main' } }}>
 
         {/* ── Header ── */}
         <DialogTitle sx={{ px: 3, pt: 2.5, pb: 0 }}>
@@ -1157,6 +1083,12 @@ export default function CustomerDetailDialog({ customer, onClose, onEdit, onNewR
                 {c.company?.name && <Typography component="span" sx={{ ml: 1.5, fontSize: '0.85rem', fontWeight: 400, color: 'text.secondary' }}>{c.company.name}</Typography>}
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 0.75, alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <IdCard size={13} style={{ opacity: 0.45 }} />
+                  <Typography sx={{ fontSize: '0.78rem', fontFamily: 'monospace', color: 'text.secondary', letterSpacing: '0.02em' }}>
+                    #{c.id}
+                  </Typography>
+                </Box>
                 {c.phone && (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <Phone size={13} style={{ opacity: 0.5 }} />
@@ -1190,13 +1122,41 @@ export default function CustomerDetailDialog({ customer, onClose, onEdit, onNewR
             </Box>
 
             {/* Action buttons */}
-            <Box data-tour-id="customer-detail-actions" sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+            <Box data-tour-id="customer-detail-actions" sx={{ display: 'flex', gap: 1, flexShrink: 0, alignItems: 'center' }}>
               <Button variant="outlined" size="small" startIcon={<Pencil size={14} />} onClick={() => onEdit(c)} sx={{ borderRadius: 2 }}>
                 Edit
               </Button>
               <Button variant="contained" size="small" startIcon={<Plus size={14} />} onClick={() => onNewRO(c)} sx={{ borderRadius: 2 }}>
                 New RO
               </Button>
+              {archiveConfirm ? (
+                <>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="error"
+                    disabled={archiveMut.isPending}
+                    onClick={() => archiveMut.mutate()}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    {archiveMut.isPending ? 'Archiving…' : 'Confirm Archive'}
+                  </Button>
+                  <Button size="small" variant="outlined" onClick={() => setArchiveConfirm(false)} sx={{ borderRadius: 2 }}>
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<Archive size={14} />}
+                  onClick={() => setArchiveConfirm(true)}
+                  sx={{ borderRadius: 2 }}
+                >
+                  Archive
+                </Button>
+              )}
               <IconButton size="small" onClick={onClose}><X size={18} /></IconButton>
             </Box>
           </Box>

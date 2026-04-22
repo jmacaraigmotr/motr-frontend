@@ -21,6 +21,9 @@ import AdminLotBuilderPage from '@/views/admin-app/AdminLotBuilderPage'
 import AdminLotBuilderPickerPage from '@/views/admin-app/AdminLotBuilderPickerPage'
 import AdminUsersView from '@/views/admin-app/AdminUsersView'
 import AdminShopLotsView from '@/views/admin-app/AdminShopLotsView'
+import RepairOrderDetailPage from '@/views/detail/RepairOrderDetailPage'
+import CustomerDetailPage from '@/views/detail/CustomerDetailPage'
+import ReportsView from '@/views/reports-view/ReportsView'
 
 function ViewRouter() {
   const { currentView } = useAuth()
@@ -39,6 +42,7 @@ function ViewRouter() {
     'team-view':          <TeamView />,
     'lot-builder-view':   <LotBuilderView />,
     'insurance-companies-view': <InsuranceCompaniesView />,
+    'reports-view':             <ReportsView />,
   }
 
   return <>{map[currentView] ?? <CustomersView />}</>
@@ -84,7 +88,11 @@ export default function Router() {
         element={
           <RequireAuth>
             <AppShell>
-              <ViewRouter />
+              <Routes>
+                <Route path="/ros/:id" element={<RepairOrderDetailPage />} />
+                <Route path="/customers/:id" element={<CustomerDetailPage />} />
+                <Route path="*" element={<ViewRouter />} />
+              </Routes>
             </AppShell>
           </RequireAuth>
         }

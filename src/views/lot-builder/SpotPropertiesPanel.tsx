@@ -57,12 +57,6 @@ export default function SpotPropertiesPanel({
         </Tooltip>
       </Box>
 
-      {zone && (
-        <Typography variant="caption" color="text.secondary">
-          in {zone.label}
-        </Typography>
-      )}
-
       <Divider />
 
       {/* Label */}

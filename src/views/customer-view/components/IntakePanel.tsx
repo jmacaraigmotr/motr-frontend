@@ -310,6 +310,8 @@ export default function IntakePanel({ roId, jobType, dealerClaimType, roSummary 
 
   function invalidateIntake() {
     qc.invalidateQueries({ queryKey: ['intake', roId] })
+    qc.invalidateQueries({ queryKey: ['repair_order_activity', roId] })
+    qc.invalidateQueries({ queryKey: ['repair_order_activity_page', roId] })
   }
 
   const createMut = useMutation({

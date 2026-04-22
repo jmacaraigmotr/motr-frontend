@@ -32,6 +32,9 @@ export interface ROAuditEntry {
   entity_id: number | null
   entity_name: string | null
   description: string | null
+  old_values: Record<string, unknown> | null
+  new_values: Record<string, unknown> | null
+  metadata: Record<string, unknown> | null
   user: { id: number; first_name: string | null; last_name: string | null; name: string | null; email: string | null } | null
 }
 
@@ -88,6 +91,7 @@ export const repairOrdersApi = {
     has_room_left_in_vehicle: boolean | null
     amount_left_in_vehicle: number | null
     rental_needed: boolean | null
+    clear_lot_location: boolean
   }>): Promise<RepairOrder> =>
     api.patch('/repair_orders/update', { id, ...data }),
 
@@ -108,8 +112,12 @@ export const repairOrdersApi = {
     api.get('/repair_orders/check_job_number', { params: { job_number } }),
 
   // ── Payments ────────────────────────────────────────────────────────────────
-  listPayments: async (repair_order_id: number): Promise<Payment[]> =>
-    api.get('/repair_orders/payments/list', { params: { repair_order_id } }),
+  listPayments: async (repair_order_id: number): Promise<Payment[]> => {
+    const result = await api.get('/repair_orders/payments/list', { params: { repair_order_id } })
+    if (Array.isArray(result)) return result
+    const r = result as { data?: Payment[]; items?: Payment[] } | null
+    return r?.data ?? r?.items ?? []
+  },
 
   listAllPayments: async (params?: PaymentsListAllParams): Promise<TransactionsListResponse> =>
     api.get('/repair_orders/payments/list_all', { params }),

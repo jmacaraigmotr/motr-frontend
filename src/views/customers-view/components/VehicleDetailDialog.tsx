@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { documentsApi } from '@/api/documents'
 import { repairOrdersApi } from '@/api/repairOrders'
+import { vehiclesApi } from '@/api/vehicles'
 import type { Vehicle } from '@/types/vehicle'
 import type { CustomerDocument } from '@/types/document'
 import type { RepairOrderListItem } from '@/types/repairOrder'
@@ -9,6 +10,7 @@ import { JOB_STATUS_LABELS, JOB_STATUS_COLORS, JOB_TYPE_LABELS } from '@/types/r
 import Dialog from '@mui/material/Dialog'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
+import DialogTitle from '@mui/material/DialogTitle'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Button from '@mui/material/Button'
@@ -19,8 +21,10 @@ import Tooltip from '@mui/material/Tooltip'
 import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
 import Chip from '@mui/material/Chip'
-import { X, Pencil, Plus, Car, FileText, ExternalLink, Shield, Gauge, CreditCard, ClipboardList } from 'lucide-react'
+import CircularProgress from '@mui/material/CircularProgress'
+import { X, Pencil, Plus, Car, FileText, ExternalLink, Shield, Gauge, CreditCard, ClipboardList, History } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
+import RecordHistory from '@/components/RecordHistory'
 
 const CATEGORY_LABELS: Record<string, string> = {
   registration:   'Registration',
@@ -304,16 +308,25 @@ interface Props {
   onDelete: () => void
   onNewRO: () => void
   onSelectRO?: (id: number) => void
+  zIndex?: number
 }
 
-export default function VehicleDetailDialog({ vehicle: v, onClose, onEdit, onDelete, onNewRO, onSelectRO }: Props) {
+export default function VehicleDetailDialog({ vehicle: v, onClose, onEdit, onDelete, onNewRO, onSelectRO, zIndex }: Props) {
   const [tab, setTab] = useState(0)
+  const [historyOpen, setHistoryOpen] = useState(false)
+
+  const { data: historyEntries = [], isLoading: historyLoading } = useQuery({
+    queryKey: ['vehicle_history', v.id],
+    queryFn: () => vehiclesApi.history(v.id),
+    enabled: historyOpen,
+    staleTime: 30_000,
+  })
 
   const vehicleTitle = [v.year, v.make, v.model].filter(Boolean).join(' ') || 'Vehicle'
   const plateDisplay = [v.license_plate, v.license_state].filter(Boolean).join(' · ')
 
   return (
-    <Dialog open fullWidth maxWidth="sm" onClose={onClose} PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}>
+    <Dialog open fullWidth maxWidth="sm" onClose={onClose} sx={zIndex != null ? { zIndex } : undefined} PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}>
       <Box sx={{ px: 3, pt: 3, pb: 2.5, bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider' }}>
         <IconButton
           size="small"
@@ -382,6 +395,11 @@ export default function VehicleDetailDialog({ vehicle: v, onClose, onEdit, onDel
         {tab === 1 && <RepairOrdersTab vehicleId={v.id} customerId={v.customer_id} onSelectRO={onSelectRO} />}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2.5, pt: 0, gap: 1 }}>
+        <Tooltip title="Edit History">
+          <IconButton size="small" onClick={() => setHistoryOpen(true)} sx={{ mr: 'auto', color: 'text.secondary' }}>
+            <History size={16} />
+          </IconButton>
+        </Tooltip>
         <Button onClick={onEdit} variant="outlined" size="small" startIcon={<Pencil size={13} />} sx={{ fontSize: '0.78rem' }}>
           Edit
         </Button>
@@ -389,6 +407,39 @@ export default function VehicleDetailDialog({ vehicle: v, onClose, onEdit, onDel
           New RO
         </Button>
       </DialogActions>
+
+      {/* Vehicle Edit History Dialog */}
+      <Dialog
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        sx={{ zIndex: (zIndex ?? 1300) + 100 }}
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+          <Box>
+            <Typography fontWeight={800} fontSize="1rem">Edit History</Typography>
+            <Typography fontSize="0.8rem" color="text.secondary">{vehicleTitle}</Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setHistoryOpen(false)}><X size={17} /></IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          {historyLoading ? (
+            <Stack spacing={1.5} sx={{ py: 2, alignItems: 'center' }}>
+              <CircularProgress size={22} />
+              <Typography fontSize="0.82rem" color="text.secondary">Loading history…</Typography>
+            </Stack>
+          ) : historyEntries.length === 0 ? (
+            <Box sx={{ py: 5, textAlign: 'center' }}>
+              <History size={26} style={{ opacity: 0.18, marginBottom: 8 }} />
+              <Typography sx={{ color: 'text.disabled', fontSize: '0.85rem' }}>No edit history for this vehicle.</Typography>
+            </Box>
+          ) : (
+            <RecordHistory entries={historyEntries} />
+          )}
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }

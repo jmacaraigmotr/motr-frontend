@@ -1,6 +1,7 @@
 import { createApiClient } from './client'
 import { API_GROUPS } from './groups'
 import type { Vehicle, CreateVehicleInput } from '@/types/vehicle'
+import type { AuditEntry } from '@/components/RecordHistory'
 
 const api = createApiClient(API_GROUPS.customers)
 
@@ -18,6 +19,9 @@ export const vehiclesApi = {
 
   delete: async (id: number): Promise<void> =>
     api.delete('/vehicles/delete', { params: { id } }),
+
+  history: async (id: number): Promise<AuditEntry[]> =>
+    api.get('/vehicles/history', { params: { id } }),
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────

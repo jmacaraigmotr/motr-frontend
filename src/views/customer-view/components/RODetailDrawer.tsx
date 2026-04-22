@@ -44,8 +44,10 @@ import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import {
   X, ClipboardList, Shield, Car, MessageSquare,
-  DollarSign, Clock, Edit, Trash2, ChevronRight, User, CalendarDays, ListChecks, MoreHorizontal, FileText, MapPin,
+  DollarSign, Clock, Edit, Trash2, ChevronRight, User, CalendarDays, ListChecks, MoreHorizontal, FileText, MapPin, History,
 } from 'lucide-react'
+import RecordHistory from '@/components/RecordHistory'
+import TransactionDetailsModal from '@/components/TransactionDetailsModal'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { format as formatDateOnly, isValid as isValidDate } from 'date-fns'
 import CSRDetailDialog from '@/components/CSRDetailDialog'
@@ -61,6 +63,7 @@ interface Props {
   roId: number | null
   onClose: () => void
   defaultTab?: number
+  zIndex?: number
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -118,12 +121,14 @@ const JOB_TYPE_LABELS: Record<JobType, string> = {
 
 const DEALER_CLAIM_TYPES: DealerClaimType[] = ['Lot', 'Transportation', 'Warranty', 'Parts', 'Used']
 
-export default function RODetailDrawer({ roId, onClose, defaultTab = 0 }: Props) {
+export default function RODetailDrawer({ roId, onClose, defaultTab = 0, zIndex }: Props) {
   const { shop } = useAuth()
   const [tab, setTab] = useState(defaultTab)
   const [jobStatusAnchor, setJobStatusAnchor] = useState<HTMLElement | null>(null)
   const [headerMenuAnchor, setHeaderMenuAnchor] = useState<HTMLElement | null>(null)
   const [editOpen, setEditOpen] = useState(false)
+  const [historyModalOpen, setHistoryModalOpen] = useState(false)
+  const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [csrDetailId, setCsrDetailId] = useState<number | null>(null)
   const [lotPickerOpen, setLotPickerOpen] = useState(false)
@@ -184,6 +189,13 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0 }: Props)
   const customerName = customer ? `${customer.first_name ?? ''} ${customer.last_name ?? ''}`.trim() : null
   const vehicleLabel = vehicle ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ') : null
 
+  const { data: activityEntries = [], isLoading: activityLoading } = useQuery({
+    queryKey: ['repair_order_activity', roId],
+    queryFn: () => repairOrdersApi.activity(roId as number),
+    enabled: !!roId,
+    staleTime: 60_000,
+  })
+
   const { data: staffList = [] } = useQuery({
     queryKey: ['staff_list', shop?.id],
     queryFn: () => repairOrdersApi.staffList(shop?.id),
@@ -240,6 +252,9 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0 }: Props)
       qc.invalidateQueries({ queryKey: ['repair_order_detail', roId] })
       qc.invalidateQueries({ queryKey: ['repair_orders_list'] })
       qc.invalidateQueries({ queryKey: ['dashboard_repair_orders'] })
+      qc.invalidateQueries({ queryKey: ['lot_canvas'] })
+      qc.invalidateQueries({ queryKey: ['lot_locations'] })
+      qc.invalidateQueries({ queryKey: ['lot_spot_detail'] })
       setEditOpen(false)
     },
     onError: (err: { message?: string }) => setEditError(err.message ?? 'Failed to save'),
@@ -261,8 +276,7 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0 }: Props)
       ? Math.round(parseFloat(editForm.amount_left_in_vehicle) * 100)
       : null
     const newSpotId = editForm.lot_location_id ? Number(editForm.lot_location_id) : null
-    const oldSpotId = ro?.lot_location_id ?? null
-    const lotChanged = newSpotId !== oldSpotId
+    const clearingLot = newSpotId === null && (ro?.lot_location_id ?? null) !== null
 
     const payload: Parameters<typeof repairOrdersApi.update>[1] = {
       notes: editForm.notes || null,
@@ -270,6 +284,7 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0 }: Props)
       csr_id: editForm.csr_id ? Number(editForm.csr_id) : null,
       estimator_id: editForm.estimator_id ? Number(editForm.estimator_id) : null,
       lot_location_id: newSpotId,
+      clear_lot_location: clearingLot || undefined,
       scheduled_out_date: editForm.scheduled_out_date || null,
       arrived_at: editForm.arrived_at || null,
       job_number: editForm.job_number ? Number(editForm.job_number) : null,
@@ -286,29 +301,23 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0 }: Props)
 
     try {
       await updateMut.mutateAsync(payload)
-      // Sync the lot spot — assignSpot handles marking occupied + logging history
-      if (lotChanged && roId) {
-        if (newSpotId) {
-          await lotApi.assignSpot(newSpotId, roId)
-        } else if (oldSpotId) {
-          await lotApi.unassignSpot(oldSpotId)
-        }
-        qc.invalidateQueries({ queryKey: ['lot_canvas'] })
-        qc.invalidateQueries({ queryKey: ['lot_locations'] })
-        qc.invalidateQueries({ queryKey: ['lot_spot_detail'] })
-      }
     } catch {
       // errors handled by updateMut.onError
     }
   }
 
-  const { data: payments = [] } = useQuery({
+  const { data: paymentsRaw = [] } = useQuery({
     queryKey: ['payments', roId],
     queryFn: () => repairOrdersApi.listPayments(roId as number),
     enabled: !!roId,
   })
+  const payments: Payment[] = Array.isArray(paymentsRaw)
+    ? paymentsRaw
+    : ((paymentsRaw as { data?: Payment[]; items?: Payment[] }).data
+        ?? (paymentsRaw as { data?: Payment[]; items?: Payment[] }).items
+        ?? [])
 
-  const hasUnpaidTransactions = (payments as { payment_status?: string }[]).some(p => p.payment_status === 'not_paid')
+  const hasUnpaidTransactions = payments.some(p => p.payment_status === 'not_paid')
   const assignedCsr = staffList.find(member => member.id === ro?.csr_id) ?? csr ?? null
   const assignedEstimator = staffList.find(member => member.id === ro?.estimator_id) ?? null
   const lotLocation = lotLocations.find(location => location.id === ro?.lot_location_id) ?? null
@@ -324,8 +333,8 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0 }: Props)
     // fallback to lotLocations data if layouts not loaded yet
     return lotLocation ? [lotLocation.zone, lotLocation.name].filter(Boolean).join(' — ') : null
   })()
-  const totalPaid = (payments as Payment[]).filter(payment => payment.payment_status === 'paid').reduce((sum, payment) => sum + payment.amount, 0)
-  const totalOutstanding = (payments as Payment[]).filter(payment => payment.payment_status === 'not_paid').reduce((sum, payment) => sum + payment.amount, 0)
+  const totalPaid = payments.filter(p => p.payment_status === 'paid').reduce((sum, p) => sum + p.amount, 0)
+  const totalOutstanding = payments.filter(p => p.payment_status === 'not_paid').reduce((sum, p) => sum + p.amount, 0)
   const totalBilled = ro?.actual_total ?? ro?.estimated_total ?? null
 
   const jobStatusMut = useMutation({
@@ -363,6 +372,7 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0 }: Props)
       onClose={onClose}
       fullWidth
       maxWidth="lg"
+      sx={zIndex != null ? { zIndex } : undefined}
       PaperProps={{
         sx: {
           borderRadius: 0,
@@ -768,12 +778,82 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0 }: Props)
                 {roId && <RentalPanel roId={roId} />}
               </TabPanel>
               <TabPanel value={tab} index={5}>
-                {roId && <EventsPanel roId={roId} events={events} staffList={staffList} jobNumber={ro?.job_number} roNumber={ro?.ro_number} />}
+                {activityLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+                    <CircularProgress size={24} />
+                  </Box>
+                ) : activityEntries.length === 0 ? (
+                  <Box sx={{ py: 6, textAlign: 'center' }}>
+                    <Clock size={28} style={{ opacity: 0.18, marginBottom: 8 }} />
+                    <Typography sx={{ color: 'text.disabled', fontSize: '0.9rem' }}>No history yet.</Typography>
+                  </Box>
+                ) : (
+                  <>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+                      <Button
+                        size="small"
+                        startIcon={<History size={14} />}
+                        onClick={() => setHistoryModalOpen(true)}
+                        sx={{ textTransform: 'none', fontSize: '0.8rem' }}
+                      >
+                        View Full History
+                      </Button>
+                    </Box>
+                    <RecordHistory
+                      entries={activityEntries}
+                      ro={{ job_number: ro?.job_number, ro_number: ro?.ro_number }}
+                      onPaymentClick={setSelectedPaymentId}
+                    />
+                  </>
+                )}
               </TabPanel>
             </Box>
           </>
         )}
       </DialogContent>
+
+      {/* ── Full History Modal ─────────────────────────────────────────── */}
+      <Dialog
+        open={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        fullWidth
+        maxWidth="md"
+        sx={{ zIndex: theme => (zIndex ?? theme.zIndex.modal) + 2 }}
+        PaperProps={{ sx: { maxHeight: '90vh', borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ pb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box>
+            <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: 'text.primary' }}>
+              Full History{ro?.job_number != null ? ` — Job #${ro.job_number}` : ''}
+            </Typography>
+            {ro?.ro_number && (
+              <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>{ro.ro_number}</Typography>
+            )}
+          </Box>
+          <IconButton size="small" onClick={() => setHistoryModalOpen(false)}>
+            <X size={16} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 3 }}>
+          {activityEntries.length === 0 ? (
+            <Box sx={{ py: 4, textAlign: 'center' }}>
+              <Clock size={28} style={{ opacity: 0.18, marginBottom: 8 }} />
+              <Typography sx={{ color: 'text.disabled', fontSize: '0.9rem' }}>No history yet.</Typography>
+            </Box>
+          ) : (
+            <RecordHistory
+              entries={activityEntries}
+              ro={{ job_number: ro?.job_number, ro_number: ro?.ro_number }}
+              onPaymentClick={setSelectedPaymentId}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <TransactionDetailsModal
+        payment={payments.find(p => p.id === selectedPaymentId) ?? null}
+        onClose={() => setSelectedPaymentId(null)}
+      />
 
       {/* ── Edit RO Dialog ─────────────────────────────────────────────── */}
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} fullWidth maxWidth="md" PaperProps={{ sx: { maxHeight: '92vh', borderRadius: 3 } }}>

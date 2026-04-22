@@ -82,6 +82,8 @@ export default function InsurancePanel({ roId }: Props) {
   function invalidateAll() {
     qc.invalidateQueries({ queryKey: ['insurance', roId] })
     qc.invalidateQueries({ queryKey: ['repair_order_detail', roId] })
+    qc.invalidateQueries({ queryKey: ['repair_order_activity', roId] })
+    qc.invalidateQueries({ queryKey: ['repair_order_activity_page', roId] })
   }
 
   const createMut = useMutation({

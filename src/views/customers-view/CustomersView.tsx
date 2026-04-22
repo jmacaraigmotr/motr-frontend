@@ -114,8 +114,8 @@ export default function CustomersView() {
   const [filter,       setFilter]      = useState('all')
   const [sortDir,      setSortDir]     = useState<'asc' | 'desc'>('asc')
   const [activeCustomer, setActiveCustomer] = useState<Customer | null>(null)
-  const [dialog,         setDialog]         = useState<DialogType>(null)
   const [newROId,        setNewROId]         = useState<number | null>(null)
+  const [dialog,         setDialog]         = useState<DialogType>(null)
   const [roClickCustomer, setRoClickCustomer] = useState<Customer | null>(null)
 
   useEffect(() => {
