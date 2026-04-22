@@ -73,7 +73,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [newROId, setNewROId] = useState<number | null>(null)
-  const [tourOpen] = useState(false)
+  const [tourOpen, setTourOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
   const [shopPickerOpen, setShopPickerOpen] = useState(false)

@@ -1,4 +1,4 @@
-import { BarChart2, DollarSign, ClipboardList, Users, TrendingUp } from 'lucide-react'
+import { DollarSign, ClipboardList, Users, TrendingUp } from 'lucide-react'
 import { PageHeader } from '@/ui'
 
 const REPORT_CARDS = [
@@ -41,8 +41,7 @@ export default function ReportsView() {
     <div className="p-6 max-w-5xl mx-auto">
       <PageHeader
         title="Reports"
-        subtitle="Analytics and summaries across your shop operations."
-        icon={<BarChart2 size={20} />}
+        description="Analytics and summaries across your shop operations."
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">

@@ -134,14 +134,14 @@ export default function TransactionDetailsModal({ payment, onClose, onEdit, onDe
     : '—'
 
   // Audit log entries for this payment's field changes only
-  const paymentAuditEntries = (txHistory as Array<{ entity_type: string; entity_id?: number | null } & Record<string, unknown>>)
+  const paymentAuditEntries = (txHistory as unknown as Array<{ entity_type: string; entity_id?: number | null } & Record<string, unknown>>)
     .filter(e => e.entity_type === 'payments' && e.entity_id === payment.id)
 
   // Convert PaymentEvents → AuditEntry shape for the history timeline.
   // Use a Set of IDs already covered by the audit log to avoid duplicates
   // for events created after the backend audit logging was added.
   const auditedEventIds = new Set(
-    (txHistory as Array<{ entity_type: string; entity_id?: number | null }>)
+    (txHistory as unknown as Array<{ entity_type: string; entity_id?: number | null }>)
       .filter(e => e.entity_type === 'payment_events')
       .map(e => e.entity_id)
   )
@@ -162,7 +162,7 @@ export default function TransactionDetailsModal({ payment, onClose, onEdit, onDe
     }))
 
   // Audit log entries for payment_events (created after backend logging was added)
-  const auditedEventEntries = (txHistory as Array<{ entity_type: string; entity_id?: number | null } & Record<string, unknown>>)
+  const auditedEventEntries = (txHistory as unknown as Array<{ entity_type: string; entity_id?: number | null } & Record<string, unknown>>)
     .filter(e => e.entity_type === 'payment_events')
 
   const paymentHistory = [...paymentAuditEntries, ...eventAuditEntries, ...auditedEventEntries]
