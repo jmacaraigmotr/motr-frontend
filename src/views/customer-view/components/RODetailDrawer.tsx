@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { repairOrdersApi } from '@/api/repairOrders'
+import { insuranceCompaniesApi } from '@/api/insuranceCompanies'
 import { lotApi } from '@/api/lot'
 import { useAuth } from '@/hooks/useAuth'
 import { JOB_STATUS_LABELS, JOB_STATUS_COLORS } from '@/types/repairOrder'
@@ -44,7 +45,7 @@ import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import {
   X, ClipboardList, Shield, Car, MessageSquare,
-  DollarSign, Clock, Edit, Trash2, ChevronRight, User, CalendarDays, ListChecks, MoreHorizontal, FileText, MapPin, History,
+  DollarSign, Clock, Edit, Trash2, ChevronRight, User, CalendarDays, ListChecks, MoreHorizontal, FileText, MapPin, History, RefreshCw,
 } from 'lucide-react'
 import RecordHistory from '@/components/RecordHistory'
 import TransactionDetailsModal from '@/components/TransactionDetailsModal'
@@ -189,11 +190,13 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0, zIndex }
   const customerName = customer ? `${customer.first_name ?? ''} ${customer.last_name ?? ''}`.trim() : null
   const vehicleLabel = vehicle ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ') : null
 
-  const { data: activityEntries = [], isLoading: activityLoading } = useQuery({
-    queryKey: ['repair_order_activity', roId],
+  const [historyFetchKey, setHistoryFetchKey] = useState(0)
+
+  const { data: activityEntries = [], isLoading: activityLoading, isFetching: activityFetching, refetch: refetchActivity } = useQuery({
+    queryKey: ['repair_order_activity', roId, historyFetchKey],
     queryFn: () => repairOrdersApi.activity(roId as number),
-    enabled: !!roId,
-    staleTime: 60_000,
+    enabled: !!roId && tab === 5,
+    staleTime: Infinity,
   })
 
   const { data: staffList = [] } = useQuery({
@@ -202,6 +205,18 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0, zIndex }
     enabled: !!shop?.id,
     staleTime: 60_000,
   })
+
+  const { data: insuranceCompanies = [] } = useQuery({
+    queryKey: ['insurance_companies', shop?.id],
+    queryFn: () => insuranceCompaniesApi.list(shop?.id),
+    enabled: !!shop?.id,
+    staleTime: 5 * 60_000,
+  })
+
+  const fkResolvers = {
+    first_party_company_id : (id: number) => insuranceCompanies.find(c => c.id === id)?.name,
+    third_party_company_id : (id: number) => insuranceCompanies.find(c => c.id === id)?.name,
+  }
 
   const { data: lotLocations = [] } = useQuery({
     queryKey: ['lot_locations'],
@@ -730,7 +745,7 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0, zIndex }
             <Box sx={{ px: 3, borderBottom: '1px solid', borderColor: 'divider' }}>
               <Tabs
                 value={tab}
-                onChange={(_, v) => setTab(v)}
+                onChange={(_, v) => { setTab(v); if (v === 5) setHistoryFetchKey(k => k + 1) }}
                 variant="scrollable"
                 scrollButtons="auto"
                 sx={{ minHeight: 44, '& .MuiTab-root': { minHeight: 44, fontSize: '0.85rem', fontWeight: 600, px: 2 } }}
@@ -789,7 +804,7 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0, zIndex }
                   </Box>
                 ) : (
                   <>
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1, mb: 2 }}>
                       <Button
                         size="small"
                         startIcon={<History size={14} />}
@@ -798,11 +813,21 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0, zIndex }
                       >
                         View Full History
                       </Button>
+                      <Button
+                        size="small"
+                        startIcon={<RefreshCw size={14} className={activityFetching ? 'animate-spin' : ''} />}
+                        onClick={() => setHistoryFetchKey(k => k + 1)}
+                        disabled={activityFetching}
+                        sx={{ textTransform: 'none', fontSize: '0.8rem' }}
+                      >
+                        Refresh
+                      </Button>
                     </Box>
                     <RecordHistory
                       entries={activityEntries}
                       ro={{ job_number: ro?.job_number, ro_number: ro?.ro_number }}
                       onPaymentClick={setSelectedPaymentId}
+                      fkResolvers={fkResolvers}
                     />
                   </>
                 )}
@@ -845,6 +870,7 @@ export default function RODetailDrawer({ roId, onClose, defaultTab = 0, zIndex }
               entries={activityEntries}
               ro={{ job_number: ro?.job_number, ro_number: ro?.ro_number }}
               onPaymentClick={setSelectedPaymentId}
+              fkResolvers={fkResolvers}
             />
           )}
         </DialogContent>

@@ -12,6 +12,7 @@ export const API_GROUPS = {
   lot: '4XgvW9gK',
   members_accounts: '6E2nOXUS',
   repair_orders: 'nR1S0R82',
+  reports: '8USpZwPh',
   shops: 'oB6onLJz',
   tadabase_sync: 'llG9PyAO',
   team_chat: 'wNXvCfgI',

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { insuranceCompaniesApi } from '@/api/insuranceCompanies'
@@ -52,15 +52,15 @@ interface InsuranceFormProps {
 
 function CompanySelect({
   label,
-  value,
+  companyId,
   companies,
   onChange,
   onAddNew,
 }: {
   label: string
-  value: string | undefined
+  companyId: number | undefined
   companies: InsuranceCompany[]
-  onChange: (val: string | undefined, company: InsuranceCompany | null) => void
+  onChange: (company: InsuranceCompany | null) => void
   onAddNew: () => void
 }) {
   return (
@@ -70,16 +70,16 @@ function CompanySelect({
         label={label}
         size="small"
         fullWidth
-        value={value ?? ''}
+        value={companyId ?? ''}
         onChange={e => {
-          const name = e.target.value || undefined
-          const match = companies.find(c => c.name === name) ?? null
-          onChange(name, match)
+          const id = e.target.value ? Number(e.target.value) : null
+          const match = id ? (companies.find(c => c.id === id) ?? null) : null
+          onChange(match)
         }}
       >
         <MenuItem value=""><em>None</em></MenuItem>
         {companies.map(c => (
-          <MenuItem key={c.id} value={c.name}>{c.name}</MenuItem>
+          <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
         ))}
       </TextField>
       <Button
@@ -108,7 +108,9 @@ export default function InsuranceForm({
 }: InsuranceFormProps) {
   const { shop } = useAuth()
   const qc = useQueryClient()
-  const [addCompanyOpen, setAddCompanyOpen] = useState(false)
+  const [addCompanyFor, setAddCompanyFor] = useState<'first_party' | 'third_party' | null>(null)
+  const addCompanyForRef = useRef<'first_party' | 'third_party' | null>(null)
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   const { data: companies = [] } = useQuery({
     queryKey: ['insurance_companies', shop?.id],
@@ -123,7 +125,22 @@ export default function InsuranceForm({
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    // Validate: company required when party is enabled
+    if (hasFirstParty && !value.first_party_company_id) {
+      setValidationError('1st Party company is required when 1st Party is enabled.')
+      return
+    }
+    if (hasThirdParty && !value.third_party_company_id) {
+      setValidationError('3rd Party company is required when 3rd Party is enabled.')
+      return
+    }
+    setValidationError(null)
     onSubmit()
+  }
+
+  function openAddCompanyDialog(party: 'first_party' | 'third_party') {
+    addCompanyForRef.current = party
+    setAddCompanyFor(party)
   }
 
   function handleCompanyCreated(company: InsuranceCompany) {
@@ -132,13 +149,15 @@ export default function InsuranceForm({
       ...(company.rep_name  ? { rep_name:  company.rep_name }  : {}),
       ...(company.rep_phone ? { rep_phone: company.rep_phone } : {}),
     }
-    // Auto-select in whichever party section is active (first party takes priority)
-    if (hasFirstParty && !value.first_party_company) {
-      onChange({ first_party_company: company.name, first_party_rep_name: repPatch.rep_name, first_party_rep_phone: repPatch.rep_phone })
-    } else if (hasThirdParty && !value.third_party_company) {
-      onChange({ third_party_company: company.name, third_party_rep_name: repPatch.rep_name, third_party_rep_phone: repPatch.rep_phone })
+    // Use ref to avoid stale closure — state may not reflect latest value in async callbacks
+    const party = addCompanyForRef.current
+    if (party === 'first_party') {
+      onChange({ first_party_company_id: company.id, first_party_rep_name: repPatch.rep_name, first_party_rep_phone: repPatch.rep_phone })
+    } else if (party === 'third_party') {
+      onChange({ third_party_company_id: company.id, third_party_rep_name: repPatch.rep_name, third_party_rep_phone: repPatch.rep_phone })
     }
-    setAddCompanyOpen(false)
+    addCompanyForRef.current = null
+    setAddCompanyFor(null)
   }
 
   return (
@@ -148,7 +167,9 @@ export default function InsuranceForm({
           {mode === 'edit' ? 'Edit Insurance' : 'Add Insurance'}
         </Typography>
 
-        {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{error}</Alert>}
+        {(validationError || error) && (
+          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{validationError ?? error}</Alert>
+        )}
 
         <Box sx={{ display: 'flex', gap: 3, mb: 2, flexWrap: 'wrap' }}>
           <FormControlLabel
@@ -183,16 +204,14 @@ export default function InsuranceForm({
               <Grid item xs={12}>
                 <CompanySelect
                   label="Company"
-                  value={value.first_party_company}
+                  companyId={value.first_party_company_id}
                   companies={companies}
-                  onChange={(val, co) => onChange({
-                    first_party_company: val,
-                    ...(co ? {
-                      first_party_rep_name:  co.rep_name  ?? undefined,
-                      first_party_rep_phone: co.rep_phone ?? undefined,
-                    } : {}),
+                  onChange={(co) => onChange({
+                    first_party_company_id: co?.id ?? undefined,
+                    first_party_rep_name:  co?.rep_name  ?? undefined,
+                    first_party_rep_phone: co?.rep_phone ?? undefined,
                   })}
-                  onAddNew={() => setAddCompanyOpen(true)}
+                  onAddNew={() => openAddCompanyDialog('first_party')}
                 />
               </Grid>
               {FIRST_PARTY_EXTRA.map(({ key, label }) => (
@@ -220,16 +239,14 @@ export default function InsuranceForm({
               <Grid item xs={12}>
                 <CompanySelect
                   label="Company"
-                  value={value.third_party_company}
+                  companyId={value.third_party_company_id}
                   companies={companies}
-                  onChange={(val, co) => onChange({
-                    third_party_company: val,
-                    ...(co ? {
-                      third_party_rep_name:  co.rep_name  ?? undefined,
-                      third_party_rep_phone: co.rep_phone ?? undefined,
-                    } : {}),
+                  onChange={(co) => onChange({
+                    third_party_company_id: co?.id ?? undefined,
+                    third_party_rep_name:  co?.rep_name  ?? undefined,
+                    third_party_rep_phone: co?.rep_phone ?? undefined,
                   })}
-                  onAddNew={() => setAddCompanyOpen(true)}
+                  onAddNew={() => openAddCompanyDialog('third_party')}
                 />
               </Grid>
               {THIRD_PARTY_EXTRA.map(({ key, label }) => (
@@ -307,8 +324,8 @@ export default function InsuranceForm({
       </Box>
 
       <AddInsuranceCompanyDialog
-        open={addCompanyOpen}
-        onClose={() => setAddCompanyOpen(false)}
+        open={addCompanyFor !== null}
+        onClose={() => setAddCompanyFor(null)}
         onCreated={handleCompanyCreated}
       />
     </>

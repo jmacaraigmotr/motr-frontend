@@ -247,14 +247,13 @@ function LotMap({
             {zoneRos.map(ro => {
               const tone = jobStatusToTone(ro.job_status)
               const statusClasses: Record<string, string> = {
-                neutral: 'border-[var(--line)] bg-white',
-                success: 'border-[rgba(34,197,94,0.18)] bg-[rgba(240,253,244,0.92)]',
-                warning: 'border-[rgba(245,158,11,0.18)] bg-[rgba(255,251,235,0.92)]',
-                danger: 'border-[rgba(239,68,68,0.18)] bg-[rgba(254,242,242,0.92)]',
-                info: 'border-[rgba(59,130,246,0.18)] bg-[rgba(239,246,255,0.92)]',
-                secondary: 'border-[var(--line)] bg-white',
-                new: 'border-[var(--line)] bg-white',
-                default: 'border-[var(--line)] bg-white',
+                'in-progress': 'border-[rgba(59,130,246,0.18)] bg-[rgba(239,246,255,0.92)]',
+                'waiting':     'border-[rgba(245,158,11,0.18)] bg-[rgba(255,251,235,0.92)]',
+                'done':        'border-[rgba(34,197,94,0.18)] bg-[rgba(240,253,244,0.92)]',
+                'overdue':     'border-[rgba(239,68,68,0.18)] bg-[rgba(254,242,242,0.92)]',
+                'draft':       'border-[var(--line)] bg-white',
+                'new':         'border-[var(--line)] bg-white',
+                default:       'border-[var(--line)] bg-white',
               }
               const v = ro.vehicle ?? ro.vehicles
               return (
@@ -574,9 +573,7 @@ export default function DashboardView() {
                   <div className="rounded-full border border-[var(--line)] bg-white/85 px-3.5 py-2 text-[13px] text-[var(--text-default)]">
                     <span className="font-semibold text-[var(--text-strong)]">{openRos.length}</span> active repairs
                   </div>
-                  <div className="rounded-full border border-[var(--line)] bg-white/85 px-3.5 py-2 text-[13px] text-[var(--text-default)]">
-                    <span className="font-semibold text-[var(--text-strong)]">{needsAttentionToday}</span> need attention
-                  </div>
+                  {/* needs-attention pill hidden per task #868jc1vcb */}
                   <div className="rounded-full border border-[var(--line)] bg-white/85 px-3.5 py-2 text-[13px] text-[var(--text-default)]">
                     <span className="font-semibold text-[var(--text-strong)]">{promisedToday.length}</span> due out today
                   </div>
@@ -614,7 +611,7 @@ export default function DashboardView() {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <MetricCard
                 icon={<Car size={20} />}
                 label="Cars on Lot"
@@ -629,14 +626,7 @@ export default function DashboardView() {
                 supporting={activeRepairsSupporting}
                 hint={activeRepairsHint}
               />
-              <MetricCard
-                icon={<AlertCircle size={20} />}
-                label="Needs Attention Today"
-                value={isLoading ? '—' : needsAttentionToday}
-                supporting={attentionSupporting}
-                hint={attentionHint}
-                tone={needsAttentionToday > 0 ? 'danger' : 'neutral'}
-              />
+              {/* Needs Attention Today MetricCard hidden per task #868jc1vcb */}
               <MetricCard
                 icon={<CreditCard size={20} />}
                 label="Waiting for Payment"

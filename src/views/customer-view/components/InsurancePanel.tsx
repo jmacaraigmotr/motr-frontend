@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '@/hooks/useAuth'
 import { insuranceApi } from '@/api/insurance'
 import type { CreateInsuranceInput, UpdateInsuranceInput } from '@/api/insurance'
+import { insuranceCompaniesApi } from '@/api/insuranceCompanies'
+import type { InsuranceCompany } from '@/api/insuranceCompanies'
 import type { ROInsurance } from '@/types/repairOrder'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -28,7 +31,11 @@ function InfoRow({ label, value }: { label: string; value: string | null | undef
   )
 }
 
-function buildFormState(existing: ROInsurance | null | undefined, roId: number): CreateInsuranceInput {
+function buildFormState(
+  existing: ROInsurance | null | undefined,
+  roId: number,
+  companies: InsuranceCompany[] = [],
+): CreateInsuranceInput {
   if (!existing) {
     return {
       repair_order_id: roId,
@@ -37,21 +44,25 @@ function buildFormState(existing: ROInsurance | null | undefined, roId: number):
     }
   }
 
+  // Resolve company IDs — prefer the stored _id, fall back to name match for legacy records
+  const resolveId = (id: number | null, name: string | null) =>
+    id ?? (name ? (companies.find(c => c.name === name)?.id ?? undefined) : undefined)
+
   return {
-    repair_order_id        : roId,
-    has_first_party        : existing.has_first_party ?? false,
-    has_third_party        : existing.has_third_party ?? false,
-    first_party_company    : existing.first_party_company ?? undefined,
-    first_party_claim_number: existing.first_party_claim_number ?? undefined,
-    first_party_rep_name   : existing.first_party_rep_name ?? undefined,
-    first_party_rep_phone  : existing.first_party_rep_phone ?? undefined,
-    third_party_company    : existing.third_party_company ?? undefined,
-    third_party_claim_number: existing.third_party_claim_number ?? undefined,
-    third_party_rep_name   : existing.third_party_rep_name ?? undefined,
-    third_party_rep_phone  : existing.third_party_rep_phone ?? undefined,
-    liability_percentage   : normalizeLiabilityValue(existing.liability_percentage),
-    pd_limit               : existing.pd_limit ?? undefined,
-    notes                  : existing.notes ?? undefined,
+    repair_order_id          : roId,
+    has_first_party          : existing.has_first_party ?? false,
+    has_third_party          : existing.has_third_party ?? false,
+    first_party_company_id   : resolveId(existing.first_party_company_id, existing.first_party_company),
+    first_party_claim_number : existing.first_party_claim_number ?? undefined,
+    first_party_rep_name     : existing.first_party_rep_name ?? undefined,
+    first_party_rep_phone    : existing.first_party_rep_phone ?? undefined,
+    third_party_company_id   : resolveId(existing.third_party_company_id, existing.third_party_company),
+    third_party_claim_number : existing.third_party_claim_number ?? undefined,
+    third_party_rep_name     : existing.third_party_rep_name ?? undefined,
+    third_party_rep_phone    : existing.third_party_rep_phone ?? undefined,
+    liability_percentage     : normalizeLiabilityValue(existing.liability_percentage),
+    pd_limit                 : existing.pd_limit ?? undefined,
+    notes                    : existing.notes ?? undefined,
   }
 }
 
@@ -69,6 +80,7 @@ function formatLiability(value?: string | null) {
 
 export default function InsurancePanel({ roId }: Props) {
   const qc = useQueryClient()
+  const { shop } = useAuth()
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [form, setForm] = useState<CreateInsuranceInput | null>(null)
@@ -78,6 +90,15 @@ export default function InsurancePanel({ roId }: Props) {
     queryKey: ['insurance', roId],
     queryFn: () => insuranceApi.getByRO(roId),
   })
+
+  const { data: companies = [] } = useQuery({
+    queryKey: ['insurance_companies', shop?.id],
+    queryFn: () => insuranceCompaniesApi.list(shop?.id),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const resolveCompanyName = (id: number | null | undefined) =>
+    companies.find(c => c.id === id)?.name ?? null
 
   function invalidateAll() {
     qc.invalidateQueries({ queryKey: ['insurance', roId] })
@@ -105,7 +126,7 @@ export default function InsurancePanel({ roId }: Props) {
   function startEdit() {
     setConfirmDelete(false)
     setApiError(null)
-    setForm(buildFormState(ins, roId))
+    setForm(buildFormState(ins, roId, companies))
     setEditing(true)
   }
 
@@ -187,7 +208,7 @@ export default function InsurancePanel({ roId }: Props) {
                   <Box sx={{ display: 'flex', borderBottom: '1px solid', borderColor: 'divider' }}>
                     <Box sx={{ flex: 1, px: 2, py: 1.25 }}>
                       <Typography sx={{ fontSize: '0.62rem', fontWeight: 600, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.25 }}>Company</Typography>
-                      <Typography sx={{ fontSize: '0.88rem', fontWeight: 700, color: ins.first_party_company ? 'text.primary' : 'text.disabled' }}>{ins.first_party_company ?? '—'}</Typography>
+                      <Typography sx={{ fontSize: '0.88rem', fontWeight: 700, color: resolveCompanyName(ins.first_party_company_id) ? 'text.primary' : 'text.disabled' }}>{resolveCompanyName(ins.first_party_company_id) ?? '—'}</Typography>
                     </Box>
                     <Box sx={{ flex: 1, px: 2, py: 1.25, borderLeft: '1px solid', borderColor: 'divider' }}>
                       <Typography sx={{ fontSize: '0.62rem', fontWeight: 600, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.25 }}>Claim #</Typography>
@@ -215,7 +236,7 @@ export default function InsurancePanel({ roId }: Props) {
                   <Box sx={{ display: 'flex', borderBottom: '1px solid', borderColor: 'divider' }}>
                     <Box sx={{ flex: 1, px: 2, py: 1.25 }}>
                       <Typography sx={{ fontSize: '0.62rem', fontWeight: 600, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.25 }}>Company</Typography>
-                      <Typography sx={{ fontSize: '0.88rem', fontWeight: 700, color: ins.third_party_company ? 'text.primary' : 'text.disabled' }}>{ins.third_party_company ?? '—'}</Typography>
+                      <Typography sx={{ fontSize: '0.88rem', fontWeight: 700, color: resolveCompanyName(ins.third_party_company_id) ? 'text.primary' : 'text.disabled' }}>{resolveCompanyName(ins.third_party_company_id) ?? '—'}</Typography>
                     </Box>
                     <Box sx={{ flex: 1, px: 2, py: 1.25, borderLeft: '1px solid', borderColor: 'divider' }}>
                       <Typography sx={{ fontSize: '0.62rem', fontWeight: 600, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.25 }}>Claim #</Typography>

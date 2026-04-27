@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Stage, Layer, Rect, Text, Group, Line, Image as KonvaImage } from 'react-konva'
+﻿﻿import { useEffect, useRef, useState } from 'react'
+import { Stage, Layer, Rect, Text, Group, Line, Circle, Image as KonvaImage } from 'react-konva'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -16,7 +16,7 @@ import Tabs from '@mui/material/Tabs'
 import Typography from '@mui/material/Typography'
 import { Clock, MapPin, MoveRight, X, Car, User, CalendarDays, History, ZoomIn, ZoomOut, Maximize2, Trash2 } from 'lucide-react'
 import { lotApi } from '@/api/lot'
-import type { LotCanvasPayload, SpotDetail } from '@/api/lot'
+import type { LotCanvasPayload, SpotDetail, LotSpot } from '@/api/lot'
 import { LotPickerDialog } from './LotPickerDialog'
 import type Konva from 'konva'
 import { differenceInMinutes, format, formatDistanceToNow, parseISO, isValid } from 'date-fns'
@@ -95,6 +95,22 @@ function CanvasView({ canvasData, backgroundImage, backgroundOpacity, selectedSp
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
   const [bgImgEl, setBgImgEl] = useState<HTMLImageElement | null>(null)
   const [bgFit, setBgFit] = useState({ w: 0, h: 0 })
+
+  // Display toggles
+  const [showSpotNames, setShowSpotNames] = useState(false)
+  const [showJobNumber, setShowJobNumber] = useState(true)
+  const [showVacantIcon, setShowVacantIcon] = useState(true)
+
+  // Hover tooltip
+  const [tooltip, setTooltip] = useState<{ spot: LotSpot; x: number; y: number } | null>(null)
+
+  // Preload FA font so Konva canvas can render glyphs immediately
+  useEffect(() => {
+    document.fonts.load('900 16px "Font Awesome 6 Free"').then(() => {
+      stageRef.current?.getLayers().forEach(l => l.batchDraw())
+    })
+  }, [])
+
 
   const layout = canvasData.layout
   const designW = layout?.canvas_width ?? 1200
@@ -251,6 +267,39 @@ function CanvasView({ canvasData, backgroundImage, backgroundOpacity, selectedSp
 
   return (
     <Box ref={containerRef} sx={{ width: '100%', height: '100%', bgcolor: '#1a1a1a', overflow: 'hidden', position: 'relative' }}>
+      {/* Display toggles */}
+      <Box sx={{
+        position: 'absolute', top: 10, left: 10, zIndex: 10,
+        display: 'flex', gap: 0.75, flexWrap: 'wrap',
+      }}>
+        {([
+          { label: 'Spot Names', value: showSpotNames, set: setShowSpotNames },
+          { label: 'Job #',      value: showJobNumber, set: setShowJobNumber },
+          { label: 'Vacant Icon',value: showVacantIcon,set: setShowVacantIcon },
+        ] as const).map(({ label, value, set }) => (
+          <Box
+            key={label}
+            onClick={() => set((v: boolean) => !v)}
+            sx={{
+              px: 1.25, py: 0.4,
+              borderRadius: '6px',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              userSelect: 'none',
+              border: '1px solid',
+              transition: 'all 0.15s',
+              bgcolor: value ? 'rgba(255,255,255,0.15)' : 'rgba(30,30,30,0.85)',
+              borderColor: value ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.12)',
+              color: value ? '#fff' : '#888',
+              '&:hover': { borderColor: 'rgba(255,255,255,0.3)', color: '#ccc' },
+            }}
+          >
+            {value ? '✓ ' : ''}{label}
+          </Box>
+        ))}
+      </Box>
+
       {/* Mini-map */}
       {containerSize.w > 0 && (
         <Box sx={{ position: 'absolute', bottom: 12, left: 12, zIndex: 10, borderRadius: 1.5, overflow: 'hidden', border: '1px solid #444', boxShadow: '0 2px 8px rgba(0,0,0,0.6)', cursor: 'crosshair' }}>
@@ -323,28 +372,117 @@ function CanvasView({ canvasData, backgroundImage, backgroundOpacity, selectedSp
                     const r = getSpotRect(spot, zone, zone.spots.length)
                     const isSelected = selectedSpotId === spot.id
                     const isOccupied = spot.is_occupied
+                    const isPolySpot = !!spot.canvas_points
+                    const iconSize = Math.min(r.w, r.h)
 
-                    const fillColor = isSelected
-                      ? '#1565C0'
-                      : isOccupied
-                      ? '#E65100'
-                      : '#2a2a2a'
-                    const strokeColor = isSelected ? '#90CAF9' : isOccupied ? '#FF8F00' : '#555'
-                    const strokeW = isSelected ? 2.5 : 1
+                    // Occupied: amber fill. Vacant: very dark with subtle green tint
+                    const fillColor = isOccupied ? '#3a1a00' : '#161f16'
+                    const strokeColor = isSelected ? '#ffffff' : isOccupied ? '#FF8F00' : '#2e4a2e'
+                    const strokeW = isSelected ? 2.5 : 1.5
+                    const vacantDash = isOccupied ? undefined : [4, 3]
+
+                    const jobNum = spot.ro?.job_number ?? (spot as any).job_number ?? null
+                    const jobLabel = jobNum != null ? `#${jobNum}` : spot.ro_number ?? null
 
                     return (
                       <Group
                         key={spot.id}
                         onClick={() => onSpotClick(spot.id, layout?.id ?? 0)}
-                        onMouseEnter={(e) => setCursor(e, 'pointer')}
-                        onMouseLeave={(e) => setCursor(e, 'default')}
+                        onMouseEnter={(e) => {
+                          setCursor(e, 'pointer')
+                          setTooltip({ spot, x: e.evt.clientX, y: e.evt.clientY })
+                        }}
+                        onMouseMove={(e) => {
+                          setTooltip(t => t ? { ...t, x: e.evt.clientX, y: e.evt.clientY } : null)
+                        }}
+                        onMouseLeave={(e) => {
+                          setCursor(e, 'default')
+                          setTooltip(null)
+                        }}
                       >
-                        <Rect x={r.x} y={r.y} width={r.w} height={r.h}
-                          fill={fillColor} stroke={strokeColor} strokeWidth={strokeW} cornerRadius={3} />
-                        <Text x={r.x + 2} y={r.y + r.h / 2 - 6}
-                          width={r.w - 4} text={spot.name} fontSize={10}
-                          fill={isSelected ? '#fff' : isOccupied ? '#FFE0B2' : '#aaa'}
-                          align="center" ellipsis />
+                        {isPolySpot ? (
+                          <Line
+                            points={JSON.parse(spot.canvas_points!)}
+                            closed
+                            fill={fillColor} stroke={strokeColor} strokeWidth={strokeW}
+                            dash={vacantDash}
+                            shadowColor={isSelected ? '#fff' : 'transparent'}
+                            shadowBlur={isSelected ? 10 : 0}
+                            shadowOpacity={0.6}
+                          />
+                        ) : (
+                          <Rect x={r.x} y={r.y} width={r.w} height={r.h}
+                            fill={fillColor} stroke={strokeColor} strokeWidth={strokeW} cornerRadius={3}
+                            dash={vacantDash}
+                            shadowColor={isSelected ? '#fff' : 'transparent'}
+                            shadowBlur={isSelected ? 10 : 0}
+                            shadowOpacity={0.6}
+                          />
+                        )}
+
+                        {isOccupied ? (
+                          <>
+                            {/* fa-location-dot pin icon */}
+                            <Text
+                              x={r.x} y={r.y + r.h / 2 - iconSize * 0.36 - (showJobNumber && jobLabel ? iconSize * 0.1 : 0)}
+                              width={r.w}
+                              text={''}
+                              fontFamily='"Font Awesome 6 Free"'
+                              fontStyle="900"
+                              fontSize={Math.max(8, iconSize * 0.46)}
+                              fill={isSelected ? '#FFD54F' : '#FFB74D'}
+                              align="center"
+                              listening={false}
+                            />
+                            {showJobNumber && jobLabel && (
+                              <Text
+                                x={r.x + 1} y={r.y + r.h / 2 + iconSize * 0.22}
+                                width={r.w - 2}
+                                text={jobLabel}
+                                fontSize={Math.max(6, iconSize * 0.18)}
+                                fill={isSelected ? '#fff' : '#FFB74D'}
+                                fontStyle="bold"
+                                align="center" ellipsis
+                                listening={false}
+                              />
+                            )}
+                            {showSpotNames && (
+                              <Text
+                                x={r.x + 1} y={r.y + 3}
+                                width={r.w - 2}
+                                text={spot.name}
+                                fontSize={Math.max(5, iconSize * 0.14)}
+                                fill={isSelected ? '#fff' : '#888'}
+                                align="center" ellipsis
+                                listening={false}
+                              />
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {/* Green availability dot */}
+                            {showVacantIcon && (
+                              <Circle
+                                x={r.x + r.w / 2}
+                                y={showSpotNames ? r.y + r.h * 0.38 : r.y + r.h / 2}
+                                radius={Math.max(3, iconSize * 0.14)}
+                                fill={isSelected ? '#fff' : '#4CAF50'}
+                                listening={false}
+                              />
+                            )}
+                            {showSpotNames && (
+                              <Text
+                                x={r.x + 1}
+                                y={r.y + (showVacantIcon ? r.h * 0.58 : r.h / 2 - iconSize * 0.1)}
+                                width={r.w - 2} text={spot.name}
+                                fontSize={Math.max(5, iconSize * 0.16)}
+                                fill={isSelected ? '#fff' : '#6aad6a'}
+                                align="center" ellipsis
+                                listening={false}
+                              />
+                            )}
+                          </>
+                        )}
                       </Group>
                     )
                   })}
@@ -354,6 +492,57 @@ function CanvasView({ canvasData, backgroundImage, backgroundOpacity, selectedSp
           </Layer>
         </Stage>
       )}
+
+      {/* Hover tooltip */}
+      {tooltip && (() => {
+        const s = tooltip.spot
+        const isOccupied = s.is_occupied
+        const jobNum = s.ro?.job_number ?? (s as any).job_number ?? null
+        const jobLabel = jobNum != null ? `#${jobNum}` : s.ro_number ?? null
+        const veh = s.vehicle
+        const vehicleLine = veh ? [veh.year, veh.make, veh.model].filter(Boolean).join(' ') : null
+        return (
+          <Box
+            sx={{
+              position: 'fixed',
+              left: tooltip.x + 14,
+              top: tooltip.y - 10,
+              zIndex: 9999,
+              pointerEvents: 'none',
+              bgcolor: 'rgba(18,18,18,0.96)',
+              border: `1px solid ${isOccupied ? '#FF8F00' : '#3a7a3a'}`,
+              borderRadius: '8px',
+              px: 1.5, py: 1,
+              minWidth: 120,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+            }}
+          >
+            {isOccupied ? (
+              <>
+                {jobLabel && (
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#FFB74D', lineHeight: 1.3 }}>
+                    Job {jobLabel}
+                  </Typography>
+                )}
+                {vehicleLine && (
+                  <Typography sx={{ fontSize: 11, color: '#ccc', lineHeight: 1.4, mt: 0.25 }}>
+                    {vehicleLine}
+                    {veh?.color && <span style={{ color: '#999' }}> · {veh.color}</span>}
+                  </Typography>
+                )}
+                <Typography sx={{ fontSize: 10, color: '#888', mt: 0.25 }}>{s.name}</Typography>
+              </>
+            ) : (
+              <>
+                <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#4CAF50', lineHeight: 1.3 }}>
+                  Vacant
+                </Typography>
+                <Typography sx={{ fontSize: 10, color: '#666', mt: 0.25 }}>{s.name}</Typography>
+              </>
+            )}
+          </Box>
+        )
+      })()}
     </Box>
   )
 }

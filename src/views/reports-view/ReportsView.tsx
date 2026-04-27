@@ -1,16 +1,30 @@
+import { useState } from 'react'
 import { DollarSign, ClipboardList, Users, TrendingUp } from 'lucide-react'
 import { PageHeader } from '@/ui'
+import TransactionsByCSRReport from './TransactionsByCSRReport'
 
-const REPORT_CARDS = [
+type ReportKey = 'transactions_by_csr' | null
+
+const REPORT_CARDS: Array<{
+  key: ReportKey
+  icon: React.ElementType
+  title: string
+  description: string
+  color: string
+  bg: string
+  soon: boolean
+}> = [
   {
+    key: 'transactions_by_csr',
     icon: DollarSign,
     title: 'Transaction Report',
-    description: 'Revenue breakdown by payment method, type, and date range.',
+    description: 'Outstanding transactions by CSR — not paid and not approved.',
     color: '#10B981',
     bg: '#ECFDF5',
     soon: false,
   },
   {
+    key: null,
     icon: ClipboardList,
     title: 'Repair Orders Report',
     description: 'RO volume, job types, status distribution, and cycle times.',
@@ -19,6 +33,7 @@ const REPORT_CARDS = [
     soon: false,
   },
   {
+    key: null,
     icon: Users,
     title: 'Customer Report',
     description: 'New vs. returning customers, referral sources, and retention.',
@@ -27,6 +42,7 @@ const REPORT_CARDS = [
     soon: true,
   },
   {
+    key: null,
     icon: TrendingUp,
     title: 'Performance Report',
     description: 'Staff productivity, CSR assignments, and throughput trends.',
@@ -37,6 +53,12 @@ const REPORT_CARDS = [
 ]
 
 export default function ReportsView() {
+  const [activeReport, setActiveReport] = useState<ReportKey>(null)
+
+  if (activeReport === 'transactions_by_csr') {
+    return <TransactionsByCSRReport onBack={() => setActiveReport(null)} />
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <PageHeader
@@ -45,11 +67,15 @@ export default function ReportsView() {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-        {REPORT_CARDS.map(({ icon: Icon, title, description, color, bg, soon }) => (
+        {REPORT_CARDS.map(({ key, icon: Icon, title, description, color, bg, soon }) => (
           <div
             key={title}
             className="relative rounded-xl border border-[var(--line)] bg-[var(--surface-0)] p-5 flex gap-4 items-start transition-shadow hover:shadow-md"
-            style={{ opacity: soon ? 0.55 : 1, cursor: soon ? 'default' : 'pointer' }}
+            style={{
+              opacity: soon ? 0.55 : 1,
+              cursor: soon || key === null ? 'default' : 'pointer',
+            }}
+            onClick={() => !soon && key !== null && setActiveReport(key)}
           >
             <div
               className="flex items-center justify-center rounded-lg shrink-0"

@@ -24,6 +24,7 @@ import VehicleDetailDialog from './VehicleDetailDialog'
 import NewROWizard from '@/components/NewROWizard'
 import CSRDetailDialog from '@/components/CSRDetailDialog'
 import RecordHistory from '@/components/RecordHistory'
+import DocumentViewer from '@/components/DocumentViewer'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -1001,6 +1002,9 @@ export default function CustomerDetailDialog({ customer, onClose, onEdit, onNewR
   const [selectedROId, setSelectedROId] = useState<number | null>(null)
   const [csrDetailId, setCsrDetailId] = useState<number | null>(null)
   const [archiveConfirm, setArchiveConfirm] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerDocs, setViewerDocs] = useState<CustomerDocument[]>([])
+  const [viewerIndex, setViewerIndex] = useState(0)
 
   const { shop } = useAuth()
   const qc = useQueryClient()
@@ -1326,7 +1330,12 @@ export default function CustomerDetailDialog({ customer, onClose, onEdit, onNewR
                             const url = doc.file?.url
                             if (!url) return null
                             return (
-                              <Box key={doc.id ?? i} component="a" href={url} target="_blank" rel="noopener noreferrer" sx={{ display: 'inline-block', borderRadius: 1.5, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
+                              <Box
+                                key={doc.id ?? i}
+                                component="button"
+                                onClick={() => { setViewerDocs(licenseDocs); setViewerIndex(i); setViewerOpen(true) }}
+                                sx={{ display: 'inline-block', borderRadius: 1.5, overflow: 'hidden', border: '1px solid', borderColor: 'divider', cursor: 'pointer', p: 0, '&:hover': { borderColor: 'primary.main' } }}
+                              >
                                 <Box component="img" src={url} alt={`License ${i + 1}`} sx={{ display: 'block', maxWidth: 160, maxHeight: 100, objectFit: 'cover' }} />
                               </Box>
                             )
@@ -1382,6 +1391,12 @@ export default function CustomerDetailDialog({ customer, onClose, onEdit, onNewR
 
       {/* CSR Detail Dialog — opens when clicking the Assigned CSR field */}
       <CSRDetailDialog memberId={csrDetailId} onClose={() => setCsrDetailId(null)} />
+      <DocumentViewer
+        documents={viewerDocs}
+        initialIndex={viewerIndex}
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+      />
     </>
   )
 }

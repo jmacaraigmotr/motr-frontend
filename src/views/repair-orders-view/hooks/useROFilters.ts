@@ -60,8 +60,8 @@ export function useROFilters(
         case 'closed':    return r.job_status === 'closed'
         case 'all':       return r.job_status != null
         case 'deleted':   return true
-        case 'available': return r.scheduled_out_date == null && r.job_status === 'open' && !r.is_total_loss
-        case 'taken':     return r.scheduled_out_date != null && r.job_status === 'open'
+        case 'available': return r.scheduled_out_date == null && r.job_status !== 'closed' && !r.is_total_loss
+        case 'taken':     return r.scheduled_out_date != null && r.job_status !== 'closed'
         case 'arrived':   return matchesDateOffset(r.arrived_at, dateOffset)
         case 'delivered':  return matchesDateOffset(r.delivered_at, dateOffset)
         default:          return true

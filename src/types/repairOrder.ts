@@ -266,11 +266,15 @@ export interface ROInsurance {
   repair_order_id: number
   has_first_party: boolean
   has_third_party: boolean
+  // IDs stored in Xano (reference fields)
+  first_party_company_id: number | null
+  third_party_company_id: number | null
+  // Names returned via Xano addon (join from insurance_companies table)
   first_party_company: string | null
+  third_party_company: string | null
   first_party_claim_number: string | null
   first_party_rep_name: string | null
   first_party_rep_phone: string | null
-  third_party_company: string | null
   third_party_claim_number: string | null
   third_party_rep_name: string | null
   third_party_rep_phone: string | null

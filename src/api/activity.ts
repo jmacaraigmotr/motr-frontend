@@ -17,6 +17,7 @@ export interface ActivityLogEntry {
   entity_id: number | null
   entity_name: string | null
   description: string | null
+  metadata: Record<string, unknown> | null
 }
 
 export const activityApi = {

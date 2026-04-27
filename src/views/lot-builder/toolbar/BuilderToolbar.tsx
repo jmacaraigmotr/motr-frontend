@@ -1,5 +1,6 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import Box from '@mui/material/Box'
+import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
 import Slider from '@mui/material/Slider'
@@ -12,14 +13,15 @@ import {
 } from 'lucide-react'
 import { useBuilderStore } from '@/stores/builderStore'
 import type { ToolMode } from '@/stores/builderStore'
+import { lotApi } from '@/api/lot'
 
 const TOOLS: Array<{ mode: ToolMode; label: string; hint: string; Icon: React.ElementType }> = [
-  { mode: 'select',         label: 'Select',      hint: 'Select, move & resize (V)',                                          Icon: MousePointer2 },
-  { mode: 'draw-zone',      label: 'Zone',        hint: 'Draw a rectangular parking zone (Z)',                                Icon: Square        },
-  { mode: 'draw-zone-poly', label: 'Zone (poly)', hint: 'Click points to trace an irregular zone · Enter or Finish to close', Icon: Spline        },
-  { mode: 'place-spot',     label: 'Spot',        hint: 'Click inside a zone to place an individual parking spot',            Icon: MapPin        },
-  { mode: 'draw-spot-poly', label: 'Spot (poly)', hint: 'Click points to trace an irregular spot shape · Enter or Finish to close', Icon: Spline  },
-  { mode: 'pan',            label: 'Pan',         hint: 'Drag to pan the canvas (or hold Space)',                             Icon: Hand          },
+  { mode: 'select',         label: 'Select',      hint: 'Select, move & resize (V)',                                                    Icon: MousePointer2 },
+  { mode: 'draw-zone',      label: 'Zone',        hint: 'Draw a rectangular parking zone (Z)',                                          Icon: Square        },
+  { mode: 'draw-zone-poly', label: 'Zone (poly)', hint: 'Click points to trace an irregular zone · Enter or Finish to close (Shift+Z)', Icon: Spline        },
+  { mode: 'place-spot',     label: 'Spot',        hint: 'Click inside a zone to place an individual parking spot (S)',                  Icon: MapPin        },
+  { mode: 'draw-spot-poly', label: 'Spot (poly)', hint: 'Click points to trace an irregular spot shape · Enter or Finish to close (Shift+S)', Icon: Spline  },
+  { mode: 'pan',            label: 'Pan',         hint: 'Drag to pan the canvas (P or hold Space)',                          Icon: Hand          },
 ]
 
 export const MODE_HINTS: Record<ToolMode, string> = {
@@ -31,7 +33,7 @@ export const MODE_HINTS: Record<ToolMode, string> = {
   'draw-spot-poly': 'Click to place spot points · Enter or "Finish" to close · Escape to cancel',
   'draw-wall':      'Click and drag to draw a wall rectangle',
   'draw-area':      'Click and drag to draw a structural area',
-  pan:              'Drag canvas to pan · Scroll wheel to zoom',
+  pan:              'Drag canvas to pan · Scroll wheel to zoom (P or hold Space)',
 }
 
 interface BuilderToolbarProps {
@@ -44,6 +46,7 @@ const EXPANDED_W = 140
 
 export default function BuilderToolbar({ open, onToggle }: BuilderToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
 
   const {
     toolMode, setToolMode, undo, redo, canUndo, canRedo,
@@ -53,13 +56,19 @@ export default function BuilderToolbar({ open, onToggle }: BuilderToolbarProps) 
     setZonesLocked, setShowZoneLabels, setShowSpotLabels,
   } = useBuilderStore()
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => setBackgroundImage(ev.target?.result as string)
-    reader.readAsDataURL(file)
     e.target.value = ''
+    setUploading(true)
+    try {
+      const { url } = await lotApi.uploadBackground(file)
+      setBackgroundImage(url)
+    } catch {
+      // upload failed — leave background unchanged
+    } finally {
+      setUploading(false)
+    }
   }
 
   // ── Shared tool button ────────────────────────────────────────────────────────
@@ -69,6 +78,7 @@ export default function BuilderToolbar({ open, onToggle }: BuilderToolbarProps) 
     const btn = (
       <Box
         component="button"
+        data-tour={`tool-${mode}`}
         onClick={() => setToolMode(mode)}
         sx={{
           display: 'flex',
@@ -243,13 +253,21 @@ export default function BuilderToolbar({ open, onToggle }: BuilderToolbarProps) 
 
       {/* Blueprint */}
       <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
-      <ToggleRow
-        active={!!backgroundImage}
-        hint={backgroundImage ? 'Remove blueprint' : 'Upload blueprint reference'}
-        label={backgroundImage ? 'Remove bg' : 'Blueprint'}
-        icon={backgroundImage ? <X size={15} style={{ flexShrink: 0 }} /> : <Image size={15} style={{ flexShrink: 0 }} />}
-        onClick={backgroundImage ? () => setBackgroundImage(null) : () => fileInputRef.current?.click()}
-      />
+      <div data-tour="tool-blueprint">
+        <ToggleRow
+          active={!!backgroundImage}
+          hint={uploading ? 'Uploading…' : backgroundImage ? 'Remove blueprint' : 'Upload blueprint reference'}
+          label={uploading ? 'Uploading…' : backgroundImage ? 'Remove bg' : 'Blueprint'}
+          icon={
+            uploading
+              ? <CircularProgress size={13} sx={{ flexShrink: 0 }} />
+              : backgroundImage
+                ? <X size={15} style={{ flexShrink: 0 }} />
+                : <Image size={15} style={{ flexShrink: 0 }} />
+          }
+          onClick={uploading ? () => {} : backgroundImage ? () => setBackgroundImage(null) : () => fileInputRef.current?.click()}
+        />
+      </div>
 
       {backgroundImage && (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 0.5, pb: 0.5 }}>

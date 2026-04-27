@@ -87,6 +87,7 @@ const MAX_HISTORY = 50
 
 interface BuilderStore {
   layoutId: number | null
+  layoutLabel: string
   canvasWidth: number
   canvasHeight: number
 
@@ -118,6 +119,7 @@ interface BuilderStore {
   showZoneLabels: boolean
   showSpotLabels: boolean
   dirtySpotTempIds: string[]          // spots modified since last save
+  deletedSpotIds: number[]            // saved spot IDs deleted since last save
   isDirty: boolean
 
   history: BuilderSnapshot[]
@@ -221,10 +223,23 @@ function parseStructures(raw: string | null | undefined): StructureShape[] {
   try { return JSON.parse(raw) as StructureShape[] } catch { return [] }
 }
 
+// ─── Spot label ────────────────────────────────────────────────────────────────
+
+function slugify(s: string) {
+  return s.trim().replace(/\s+/g, '_').replace(/[^\w]/g, '')
+}
+
+export function makeSpotLabel(layoutLabel: string, zoneLabel: string, n: number): string {
+  const lot  = slugify(layoutLabel)  || 'Lot'
+  const zone = slugify(zoneLabel)    || 'Zone'
+  return `${lot}_${zone}_${n}`
+}
+
 // ─── Store ─────────────────────────────────────────────────────────────────────
 
 export const useBuilderStore = create<BuilderStore>((set, get) => ({
   layoutId: null,
+  layoutLabel: '',
   canvasWidth: 1200,
   canvasHeight: 800,
   boundary: null,
@@ -247,6 +262,7 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
   showZoneLabels: true,
   showSpotLabels: true,
   dirtySpotTempIds: [],
+  deletedSpotIds: [],
   isDirty: false,
   history: [],
   histCursor: -1,
@@ -281,6 +297,7 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
 
     set({
       layoutId: layout.id,
+      layoutLabel: layout.label ?? '',
       canvasWidth: layout.canvas_width ?? 1200,
       canvasHeight: layout.canvas_height ?? 800,
       boundary,
@@ -349,11 +366,18 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
       canRedo: false,
     }),
 
-  markClean: () => set({ isDirty: false, dirtySpotTempIds: [] }),
+  markClean: () => set({ isDirty: false, dirtySpotTempIds: [], deletedSpotIds: [] }),
 
   // ── Background ──────────────────────────────────────────────────────────────
 
-  setBackgroundImage: (url) => set({ backgroundImage: url, isDirty: true }),
+  setBackgroundImage: (url) => set({
+    backgroundImage: url,
+    // Reset transform so the new image gets auto-fitted on load.
+    // Without this, bgW/bgH from the previous image remain and
+    // the new image gets stretched to the old dimensions.
+    bgX: 0, bgY: 0, bgW: 0, bgH: 0,
+    isDirty: true,
+  }),
 
   setBackgroundOpacity: (v) => set({ backgroundOpacity: v, isDirty: true }),
 
@@ -449,11 +473,16 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
 
   deleteCanvasSpot: (tempId) => {
     const s = get()
+    const spot = s.canvasSpots.find((sp) => sp.tempId === tempId)
     const canvasSpots = s.canvasSpots.filter((sp) => sp.tempId !== tempId)
     const selectedSpotTempId = s.selectedSpotTempId === tempId ? null : s.selectedSpotTempId
+    // Track the backend ID so save can DELETE it from the server
+    const deletedSpotIds = spot && spot.id > 0
+      ? [...s.deletedSpotIds, spot.id]
+      : s.deletedSpotIds
     const snap = makeSnapshot(s.boundary, s.zones, s.structures, canvasSpots)
     const [history, histCursor] = pushHistory(s.history, s.histCursor, snap)
-    set({ canvasSpots, selectedSpotTempId, isDirty: true, history, histCursor, canUndo: histCursor > 0, canRedo: false })
+    set({ canvasSpots, selectedSpotTempId, deletedSpotIds, isDirty: true, history, histCursor, canUndo: histCursor > 0, canRedo: false })
   },
 
   // ── Wall drawing ────────────────────────────────────────────────────────────
@@ -534,8 +563,7 @@ export const useBuilderStore = create<BuilderStore>((set, get) => ({
     }
     const zone = s.zones.find((z) => z.tempId === zoneTempId)
     const zoneSpots = s.canvasSpots.filter((sp) => sp.zoneTempId === zoneTempId)
-    const prefix = zone?.label.trim()[0]?.toUpperCase() ?? 'S'
-    const label = `${prefix}${String(zoneSpots.length + 1).padStart(2, '0')}`
+    const label = makeSpotLabel(s.layoutLabel, zone?.label ?? '', zoneSpots.length + 1)
     const newSpot: CanvasSpot = {
       id: 0,
       tempId: crypto.randomUUID(),

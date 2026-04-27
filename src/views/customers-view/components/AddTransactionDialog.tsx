@@ -180,6 +180,7 @@ function TransactionFields({
             label="Transaction Type *"
             value={transactionType}
             onChange={e => setTransactionType(e.target.value as TransactionType)}
+            MenuProps={{ sx: { zIndex: 1400 } }}
           >
             {TRANSACTION_TYPES.map(t => (
               <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
@@ -214,6 +215,7 @@ function TransactionFields({
             label="Payment Status *"
             value={paymentStatus}
             onChange={e => setPaymentStatus(e.target.value as PaymentStatus)}
+            MenuProps={{ sx: { zIndex: 1400 } }}
             renderValue={(val) => {
               const s = PAYMENT_STATUSES.find(p => p.value === val)
               return s ? (

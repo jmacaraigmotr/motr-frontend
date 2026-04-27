@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { lotApi } from '@/api/lot'
@@ -17,14 +17,16 @@ import DialogActions from '@mui/material/DialogActions'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import { useState } from 'react'
-import { Eye, EyeOff, Save, AlertTriangle, Plus, LayoutDashboard, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Eye, EyeOff, Save, AlertTriangle, Plus, LayoutDashboard, ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react'
 import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
-import BuilderCanvas from './canvas/BuilderCanvas'
+import BuilderCanvas, { type SpotLiveData } from './canvas/BuilderCanvas'
+import type { LotSpot } from '@/api/lot'
 import BuilderToolbar, { MODE_HINTS } from './toolbar/BuilderToolbar'
 import ZonePalette from './ZonePalette'
 import SpotConfigPanel from './SpotConfigPanel'
 import SpotPropertiesPanel from './SpotPropertiesPanel'
+import LotBuilderTour from './LotBuilderTour'
 
 // ─── Create Layout Dialog ──────────────────────────────────────────────────────
 
@@ -81,10 +83,12 @@ export default function LotBuilderView({ shopIdOverride, layoutIdOverride }: Lot
   const shopId = shopIdOverride ?? shop?.id
 
   const [previewMode, setPreviewMode] = useState(false)
+  const [rawSpots, setRawSpots] = useState<LotSpot[]>([])
   const [createLayoutOpen, setCreateLayoutOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [toolbarOpen, setToolbarOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
+  const [tourOpen, setTourOpen] = useState(false)
 
   const {
     layoutId,
@@ -119,6 +123,19 @@ export default function LotBuilderView({ shopIdOverride, layoutIdOverride }: Lot
     ? zones.find((z) => z.tempId === selectedSpot.zoneTempId)
     : undefined
 
+  const spotLiveData = useMemo<Record<number, SpotLiveData>>(() => {
+    const map: Record<number, SpotLiveData> = {}
+    for (const spot of rawSpots) {
+      map[spot.id] = {
+        isOccupied: spot.is_occupied,
+        jobLabel: spot.current_ro?.job_number != null
+          ? `#${spot.current_ro.job_number}`
+          : spot.current_ro?.ro_number ?? null,
+      }
+    }
+    return map
+  }, [rawSpots])
+
   // ── Data ──────────────────────────────────────────────────────────────────────
 
   const { data: layouts = [], isLoading: layoutsLoading } = useQuery<LotLayout[]>({
@@ -151,7 +168,9 @@ export default function LotBuilderView({ shopIdOverride, layoutIdOverride }: Lot
 
       Promise.all(dbZones.map((z) => lotApi.listSpots(z.id)))
         .then((allSpotsPerZone) => {
-          loadCanvasSpots(allSpotsPerZone.flat(), zoneIdToTempId)
+          const flat = allSpotsPerZone.flat()
+          loadCanvasSpots(flat, zoneIdToTempId)
+          setRawSpots(flat)
         })
         .catch(() => {/* silently ignore — spots will just be empty */})
     }
@@ -181,7 +200,11 @@ export default function LotBuilderView({ shopIdOverride, layoutIdOverride }: Lot
       if (!mod) {
         const { setToolMode } = useBuilderStore.getState()
         if (e.key === 'v' || e.key === 'V') setToolMode('select')
-        if (e.key === 'z' || e.key === 'Z') setToolMode('draw-zone')
+        if (e.key === 'z') setToolMode('draw-zone')
+        if (e.key === 'Z') setToolMode('draw-zone-poly')
+        if (e.key === 's') setToolMode('place-spot')
+        if (e.key === 'S') setToolMode('draw-spot-poly')
+        if (e.key === 'p' || e.key === 'P') setToolMode('pan')
         if (e.key === 'Escape') { setSelected(null); setSelectedSpot(null) }
       }
     }
@@ -263,7 +286,7 @@ export default function LotBuilderView({ shopIdOverride, layoutIdOverride }: Lot
       // 3. Save spots — group new spots by zone (one bulk call per zone) + all updates in parallel
       const latestZones = useBuilderStore.getState().zones
       const latestSpots = useBuilderStore.getState().canvasSpots
-      const { dirtySpotTempIds } = useBuilderStore.getState()
+      const { dirtySpotTempIds, deletedSpotIds } = useBuilderStore.getState()
       const zoneByTempId = Object.fromEntries(latestZones.map((z) => [z.tempId, z]))
 
       // Group unsaved spots by zone
@@ -311,6 +334,8 @@ export default function LotBuilderView({ shopIdOverride, layoutIdOverride }: Lot
             canvas_points: spot.canvas_points ? JSON.stringify(spot.canvas_points) : null,
           })
         ),
+        // Delete spots that were removed since last save
+        ...deletedSpotIds.map((id) => lotApi.deleteSpot(id)),
       ])
 
       markClean()
@@ -404,6 +429,12 @@ export default function LotBuilderView({ shopIdOverride, layoutIdOverride }: Lot
           </Box>
         )}
 
+        <Tooltip title="Tour — learn how to use the lot builder">
+          <IconButton size="small" onClick={() => setTourOpen(true)} sx={{ flexShrink: 0, color: 'text.secondary' }}>
+            <HelpCircle size={16} />
+          </IconButton>
+        </Tooltip>
+
         <Tooltip title={previewMode ? 'Back to builder' : 'Preview mode'}>
           <Button
             variant="outlined"
@@ -459,7 +490,10 @@ export default function LotBuilderView({ shopIdOverride, layoutIdOverride }: Lot
                 <Typography variant="body2" color="text.secondary">Loading zones…</Typography>
               </Box>
             ) : (
-              <BuilderCanvas readonly={previewMode} />
+              <BuilderCanvas
+                readonly={previewMode}
+                spotLiveData={previewMode ? spotLiveData : undefined}
+              />
             )}
           </Box>
         </Box>
@@ -548,6 +582,8 @@ export default function LotBuilderView({ shopIdOverride, layoutIdOverride }: Lot
         onCreate={(label) => createLayoutMutation.mutate(label)}
         creating={createLayoutMutation.isPending}
       />
+
+      <LotBuilderTour open={tourOpen} onClose={() => setTourOpen(false)} />
     </Box>
   )
 }

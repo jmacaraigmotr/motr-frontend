@@ -8,6 +8,7 @@ import RODetailDrawer from '@/views/customer-view/components/RODetailDrawer'
 import { useUIStore } from '@/stores/uiStore'
 import WalkthroughTour from '@/components/onboarding/WalkthroughTour'
 import TeamChatWidget from '@/components/chat/TeamChatWidget'
+import { useTeamChatGlobal } from '@/components/chat/useTeamChatGlobal'
 import ActivityDrawer from '@/components/activity/ActivityDrawer'
 import {
   Users,
@@ -75,6 +76,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [newROId, setNewROId] = useState<number | null>(null)
   const [tourOpen, setTourOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
+  const { hasUnread, markAllSeen } = useTeamChatGlobal()
   const [activityOpen, setActivityOpen] = useState(false)
   const [shopPickerOpen, setShopPickerOpen] = useState(false)
   const [allShops, setAllShops] = useState<Shop[]>([])
@@ -202,8 +204,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <IconButton size="small" onClick={() => setActivityOpen(p => !p)}>
               <Bell size={20} />
             </IconButton>
-            <IconButton size="small" data-tour-id="team-chat-launcher" onClick={() => setChatOpen(p => !p)}>
-              <Badge color="error" variant="dot" overlap="circular">
+            <IconButton size="small" data-tour-id="team-chat-launcher" onClick={() => { setChatOpen(p => !p); markAllSeen() }}>
+              <Badge color="error" variant="dot" overlap="circular" invisible={!hasUnread}>
                 <MessageSquare size={20} />
               </Badge>
             </IconButton>
@@ -532,7 +534,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {(
             [
               { icon: Bell,          label: 'Activity',     tourId: undefined,             onClick: () => setActivityOpen(p => !p), active: activityOpen },
-              { icon: MessageSquare, label: 'Team Chat',    tourId: 'team-chat-launcher',  onClick: () => setChatOpen(p => !p),     active: chatOpen     },
+              { icon: MessageSquare, label: 'Team Chat',    tourId: 'team-chat-launcher',  onClick: () => { setChatOpen(p => !p); markAllSeen() }, active: chatOpen },
             ] as const
           ).map(({ icon: Icon, label, tourId, onClick, active }) => (
             <Tooltip key={label} title={!sidebarOpen ? label : ''} placement="right">
@@ -561,7 +563,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   }
                 }}
               >
-                <Icon size={16} className="shrink-0" style={{ opacity: 0.7 }} />
+                <Badge color="error" variant="dot" overlap="circular"
+                  invisible={label !== 'Team Chat' || !hasUnread}
+                  sx={{ '& .MuiBadge-dot': { width: 7, height: 7, minWidth: 7 } }}>
+                  <Icon size={16} className="shrink-0" style={{ opacity: 0.7 }} />
+                </Badge>
                 {sidebarOpen && label}
               </button>
             </Tooltip>

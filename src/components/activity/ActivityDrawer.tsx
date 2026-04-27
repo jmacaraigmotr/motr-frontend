@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { activityApi } from '@/api/activity'
 import type { ActivityLogEntry } from '@/api/activity'
@@ -8,6 +9,7 @@ import {
   X,
   RefreshCw,
   Activity,
+  FileText,
 } from 'lucide-react'
 import Drawer from '@mui/material/Drawer'
 import Box from '@mui/material/Box'
@@ -17,6 +19,8 @@ import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import { alpha, useTheme } from '@mui/material/styles'
+import DocumentViewer from '@/components/DocumentViewer'
+import type { CustomerDocument } from '@/types/document'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +63,46 @@ const ACTION_CONFIG = {
   },
 } as const
 
+// ── Intake document helpers ────────────────────────────────────────────────────
+
+interface IntakeDoc {
+  id?: number
+  label?: string | null
+  file?: { url?: string | null; name?: string | null; mime?: string | null } | null
+}
+
+function getIntakeDocs(entry: ActivityLogEntry): IntakeDoc[] {
+  const isIntakeCreate = entry.entity_type === 'intakes' && entry.action_type === 'create'
+  const isIntakeDocBatch = entry.entity_type === 'intake_documents' && entry.action_type === 'create'
+  if (!isIntakeCreate && !isIntakeDocBatch) return []
+  const raw = entry.metadata?.intake_documents
+  if (!Array.isArray(raw)) return []
+  return raw.filter((item): item is IntakeDoc => typeof item === 'object' && item !== null)
+}
+
+function toViewerDocs(docs: IntakeDoc[]): CustomerDocument[] {
+  return docs.map((doc, i) => ({
+    id: doc.id ?? i,
+    shop_id: 0,
+    uploaded_by: null,
+    entity_type: 'repair_order' as const,
+    entity_id: 0,
+    category: 'other' as const,
+    label: doc.label ?? null,
+    file: doc.file?.url ? {
+      access: 'public',
+      path: '',
+      name: doc.file.name ?? 'Document',
+      type: doc.file.mime?.startsWith('image/') ? 'image' : 'document',
+      size: 0,
+      mime: doc.file.mime ?? '',
+      url: doc.file.url,
+    } : null,
+    created_at: '',
+    updated_at: '',
+  }))
+}
+
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 function actorLabel(entry: ActivityLogEntry): string {
@@ -85,11 +129,12 @@ function entityLabel(entry: ActivityLogEntry): string {
   return name
 }
 
-function ActivityItem({ entry }: { entry: ActivityLogEntry }) {
+function ActivityItem({ entry, onViewDoc }: { entry: ActivityLogEntry; onViewDoc: (docs: CustomerDocument[], index: number) => void }) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const config = ACTION_CONFIG[entry.action_type]
   const Icon = config.Icon
+  const intakeDocs = getIntakeDocs(entry)
 
   return (
     <Box
@@ -152,7 +197,7 @@ function ActivityItem({ entry }: { entry: ActivityLogEntry }) {
             </>
           )}
         </Typography>
-        {entry.description && (
+        {entry.description && intakeDocs.length === 0 && (
           <Typography
             variant="caption"
             color="text.secondary"
@@ -167,7 +212,107 @@ function ActivityItem({ entry }: { entry: ActivityLogEntry }) {
             {entry.description}
           </Typography>
         )}
-        <Typography variant="caption" color="text.disabled" sx={{ mt: 0.25, display: 'block' }}>
+
+        {/* Intake document thumbnails (per batch) */}
+        {intakeDocs.length > 0 && (
+          <Box
+            sx={{
+              mt: 1,
+              p: 1.5,
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'background.default',
+            }}
+          >
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
+              Intake Documents ({intakeDocs.length})
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+              {intakeDocs.map((doc, idx) => {
+                const docLabel = doc.label || doc.file?.name || `Document ${idx + 1}`
+                const fileDisplayName = doc.file?.name || doc.label || `Document ${idx + 1}`
+                const fileUrl = doc.file?.url || null
+                const isImage = !!doc.file?.mime?.startsWith('image/')
+                const viewerDocs = toViewerDocs(intakeDocs)
+
+                if (!fileUrl) {
+                  return (
+                    <Box
+                      key={`${doc.id ?? 'doc'}-${idx}`}
+                      sx={{
+                        px: 1.5,
+                        py: 0.75,
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'background.paper',
+                        fontSize: 11,
+                        color: 'text.secondary',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.75,
+                      }}
+                    >
+                      <FileText size={13} style={{ flexShrink: 0, opacity: 0.5 }} />
+                      {fileDisplayName}
+                    </Box>
+                  )
+                }
+
+                return (
+                  <Box
+                    key={`${doc.id ?? 'doc'}-${idx}`}
+                    component="button"
+                    onClick={() => onViewDoc(viewerDocs, idx)}
+                    title={docLabel}
+                    sx={{
+                      display: 'block',
+                      overflow: 'hidden',
+                      borderRadius: 1,
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      bgcolor: 'background.paper',
+                      cursor: 'pointer',
+                      p: 0,
+                      '&:hover': { borderColor: 'primary.main' },
+                      transition: 'border-color 0.15s ease',
+                    }}
+                  >
+                    {isImage ? (
+                      <Box
+                        component="img"
+                        src={fileUrl}
+                        alt={docLabel}
+                        sx={{ width: 80, height: 60, objectFit: 'cover', display: 'block' }}
+                      />
+                    ) : (
+                      <Box
+                        sx={{
+                          width: 140,
+                          height: 60,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          px: 1.5,
+                          fontSize: 11,
+                          color: 'text.primary',
+                        }}
+                      >
+                        <FileText size={14} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
+                        <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {fileDisplayName}
+                        </Box>
+                      </Box>
+                    )}
+                  </Box>
+                )
+              })}
+            </Box>
+          </Box>
+        )}
+
+        <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, display: 'block' }}>
           {formatRelativeTime(entry.created_at)}
         </Typography>
       </Box>
@@ -184,6 +329,15 @@ interface ActivityDrawerProps {
 
 export default function ActivityDrawer({ open, onClose }: ActivityDrawerProps) {
   const theme = useTheme()
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerDocs, setViewerDocs] = useState<CustomerDocument[]>([])
+  const [viewerIndex, setViewerIndex] = useState(0)
+
+  const handleViewDoc = (docs: CustomerDocument[], index: number) => {
+    setViewerDocs(docs)
+    setViewerIndex(index)
+    setViewerOpen(true)
+  }
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['activity_recent'],
@@ -281,7 +435,7 @@ export default function ActivityDrawer({ open, onClose }: ActivityDrawerProps) {
           <Box>
             {data.map((entry, idx) => (
               <Box key={entry.id}>
-                <ActivityItem entry={entry} />
+                <ActivityItem entry={entry} onViewDoc={handleViewDoc} />
                 {idx < data.length - 1 && (
                   <Divider sx={{ mx: 2, opacity: 0.5 }} />
                 )}
@@ -290,6 +444,13 @@ export default function ActivityDrawer({ open, onClose }: ActivityDrawerProps) {
           </Box>
         )}
       </Box>
+
+      <DocumentViewer
+        documents={viewerDocs}
+        initialIndex={viewerIndex}
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+      />
     </Drawer>
   )
 }

@@ -21,7 +21,6 @@ import AdminLotBuilderPage from '@/views/admin-app/AdminLotBuilderPage'
 import AdminLotBuilderPickerPage from '@/views/admin-app/AdminLotBuilderPickerPage'
 import AdminUsersView from '@/views/admin-app/AdminUsersView'
 import AdminShopLotsView from '@/views/admin-app/AdminShopLotsView'
-import RepairOrderDetailPage from '@/views/detail/RepairOrderDetailPage'
 import CustomerDetailPage from '@/views/detail/CustomerDetailPage'
 import ReportsView from '@/views/reports-view/ReportsView'
 
@@ -89,7 +88,6 @@ export default function Router() {
           <RequireAuth>
             <AppShell>
               <Routes>
-                <Route path="/ros/:id" element={<RepairOrderDetailPage />} />
                 <Route path="/customers/:id" element={<CustomerDetailPage />} />
                 <Route path="*" element={<ViewRouter />} />
               </Routes>

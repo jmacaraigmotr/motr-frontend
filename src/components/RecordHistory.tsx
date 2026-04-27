@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
+import DocumentViewer from '@/components/DocumentViewer'
+import type { CustomerDocument } from '@/types/document'
 
 // ── Public interface ──────────────────────────────────────────────────────────
 
@@ -23,10 +25,24 @@ export interface AuditEntry {
   } | null
 }
 
+type FKResolvers = Record<string, (id: number) => string | undefined>
+
 interface RecordHistoryProps {
   entries: AuditEntry[]
   ro?: { job_number?: string | number | null; ro_number?: string | null }
   onPaymentClick?: (paymentId: number) => void
+  fkResolvers?: FKResolvers
+}
+
+interface IntakeHistoryDocument {
+  id?: number
+  label?: string | null
+  created_at?: string | null
+  file?: {
+    url?: string | null
+    name?: string | null
+    mime?: string | null
+  } | null
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -86,12 +102,12 @@ const FIELD_LABELS: Record<string, string> = {
   has_previous_estimate: 'Previous Estimate',
   // Insurance
   has_first_party: 'First Party',
-  first_party_company: '1st Party Company',
+  first_party_company_id: '1st Party Company',
   first_party_claim_number: '1st Party Claim #',
   first_party_rep_name: '1st Party Rep',
   first_party_rep_phone: '1st Party Rep Phone',
   has_third_party: 'Third Party',
-  third_party_company: '3rd Party Company',
+  third_party_company_id: '3rd Party Company',
   third_party_claim_number: '3rd Party Claim #',
   third_party_rep_name: '3rd Party Rep',
   third_party_rep_phone: '3rd Party Rep Phone',
@@ -149,6 +165,7 @@ const ENTITY_LABELS: Record<string, string> = {
   rentals: 'Rental',
   payments: 'Transaction',
   payment_events: 'Event',
+  intake_documents: 'Intake Document',
   vehicles: 'Vehicle',
   customers: 'Customer',
 }
@@ -163,11 +180,18 @@ function entityLabel(entityType: string): string {
   return ENTITY_LABELS[entityType] ?? entityType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
-function formatFieldValue(key: string, value: unknown): string {
+function formatFieldValue(key: string, value: unknown, fkResolvers?: FKResolvers): string {
   if (value === null || value === undefined || value === '') return '—'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (fkResolvers?.[key] && typeof value === 'number') {
+    const resolved = fkResolvers[key](value)
+    if (resolved) return resolved
+  }
   if (MONEY_FIELDS.has(key) && typeof value === 'number') return formatCurrency(value)
-  if (DATE_FIELDS.has(key) && typeof value === 'string') return formatDate(value)
+  if (DATE_FIELDS.has(key)) {
+    if (typeof value === 'string') return formatDate(value)
+    if (typeof value === 'number') return formatDate(new Date(value).toISOString())
+  }
   if (typeof value === 'string') {
     // humanize snake_case enum values
     return value.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -198,6 +222,39 @@ function relativeTime(isoString: string): string {
   return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+function intakeDocumentsFromMetadata(entry: AuditEntry): IntakeHistoryDocument[] {
+  const isIntakeCreate = entry.entity_type === 'intakes' && entry.action_type === 'create'
+  const isIntakeDocBatch = entry.entity_type === 'intake_documents' && entry.action_type === 'create'
+  const isIntakeDocDelete = entry.entity_type === 'intake_documents' && entry.action_type === 'delete'
+  if (!isIntakeCreate && !isIntakeDocBatch && !isIntakeDocDelete) return []
+  const raw = entry.metadata?.intake_documents
+  if (!Array.isArray(raw)) return []
+  return raw.filter((item): item is IntakeHistoryDocument => typeof item === 'object' && item !== null)
+}
+
+function toViewerDocs(docs: IntakeHistoryDocument[]): CustomerDocument[] {
+  return docs.map((doc, i) => ({
+    id: doc.id ?? i,
+    shop_id: 0,
+    uploaded_by: null,
+    entity_type: 'repair_order' as const,
+    entity_id: 0,
+    category: 'other' as const,
+    label: doc.label ?? null,
+    file: doc.file?.url ? {
+      access: 'public',
+      path: '',
+      name: doc.file.name ?? 'Document',
+      type: doc.file.mime?.startsWith('image/') ? 'image' : 'document',
+      size: 0,
+      mime: doc.file.mime ?? '',
+      url: doc.file.url,
+    } : null,
+    created_at: doc.created_at ?? '',
+    updated_at: doc.created_at ?? '',
+  }))
+}
+
 // ── Field diff builders ───────────────────────────────────────────────────────
 
 interface FieldChange {
@@ -207,20 +264,21 @@ interface FieldChange {
   newValue: string | null
 }
 
-function buildCreateFields(newValues: Record<string, unknown>): FieldChange[] {
+function buildCreateFields(newValues: Record<string, unknown>, fkResolvers?: FKResolvers): FieldChange[] {
   return Object.entries(newValues)
     .filter(([key, val]) => !SKIP_FIELDS.has(key) && val !== null && val !== undefined && val !== '')
     .map(([key, val]) => ({
       key,
       label: fieldLabel(key),
       oldValue: null,
-      newValue: formatFieldValue(key, val),
+      newValue: formatFieldValue(key, val, fkResolvers),
     }))
 }
 
 function buildUpdateFields(
   oldValues: Record<string, unknown>,
   newValues: Record<string, unknown>,
+  fkResolvers?: FKResolvers,
 ): FieldChange[] {
   const allKeys = new Set([...Object.keys(oldValues), ...Object.keys(newValues)])
   return Array.from(allKeys)
@@ -233,8 +291,8 @@ function buildUpdateFields(
     .map(key => ({
       key,
       label: fieldLabel(key),
-      oldValue: formatFieldValue(key, oldValues[key] ?? null),
-      newValue: formatFieldValue(key, newValues[key] ?? null),
+      oldValue: formatFieldValue(key, oldValues[key] ?? null, fkResolvers),
+      newValue: formatFieldValue(key, newValues[key] ?? null, fkResolvers),
     }))
 }
 
@@ -290,7 +348,7 @@ function FieldList({ changes, isCreate }: { changes: FieldChange[]; isCreate: bo
   )
 }
 
-function HistoryEntry({ entry, isLast, ro, onPaymentClick }: { entry: AuditEntry; isLast: boolean; ro?: RecordHistoryProps['ro']; onPaymentClick?: (id: number) => void }) {
+function HistoryEntry({ entry, isLast, ro, onPaymentClick, onViewDoc, fkResolvers }: { entry: AuditEntry; isLast: boolean; ro?: RecordHistoryProps['ro']; onPaymentClick?: (id: number) => void; onViewDoc?: (docs: CustomerDocument[], index: number) => void; fkResolvers?: FKResolvers }) {
   const actionType = (entry.action_type === 'create' || entry.action_type === 'update' || entry.action_type === 'delete')
     ? entry.action_type
     : 'update'
@@ -298,9 +356,10 @@ function HistoryEntry({ entry, isLast, ro, onPaymentClick }: { entry: AuditEntry
   const Icon = config.Icon
 
   const changes: FieldChange[] = (() => {
-    if (actionType === 'create' && entry.new_values) return buildCreateFields(entry.new_values)
-    if (actionType === 'update' && entry.old_values && entry.new_values) return buildUpdateFields(entry.old_values, entry.new_values)
-    if (actionType === 'delete' && entry.old_values) return buildCreateFields(entry.old_values)
+    if (entry.entity_type === 'intake_documents') return []
+    if (actionType === 'create' && entry.new_values) return buildCreateFields(entry.new_values, fkResolvers)
+    if (actionType === 'update' && entry.old_values && entry.new_values) return buildUpdateFields(entry.old_values, entry.new_values, fkResolvers)
+    if (actionType === 'delete' && entry.old_values) return buildCreateFields(entry.old_values, fkResolvers)
     return []
   })()
 
@@ -311,6 +370,7 @@ function HistoryEntry({ entry, isLast, ro, onPaymentClick }: { entry: AuditEntry
   const paymentEventTxId = isPaymentEvent
     ? (entry.metadata?.payment_id as number | undefined) ?? null
     : null
+  const groupedIntakeDocuments = intakeDocumentsFromMetadata(entry)
   const jobLabel = (isPayment || isPaymentEvent)
     ? null
     : ro?.job_number != null ? ` — Job #${ro.job_number}` : (entry.entity_name && !/^\d+$/.test(entry.entity_name) ? ` — ${entry.entity_name}` : '')
@@ -389,8 +449,58 @@ function HistoryEntry({ entry, isLast, ro, onPaymentClick }: { entry: AuditEntry
           <div className="mt-2 text-[13px] text-[var(--text-muted)]">{entry.description}</div>
         )}
 
+        {/* Intake document batch (grouped under intake create) */}
+        {groupedIntakeDocuments.length > 0 && (
+          <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--surface-1)] px-4 py-3">
+            <div className="mb-2 text-[12px] font-medium text-[var(--text-muted)]">
+              Intake Documents ({groupedIntakeDocuments.length})
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {groupedIntakeDocuments.map((doc, idx) => {
+                const docLabel = doc.label || doc.file?.name || `Document ${idx + 1}`
+                const fileDisplayName = doc.file?.name || doc.label || `Document ${idx + 1}`
+                const fileUrl = doc.file?.url || null
+                const isImage = !!doc.file?.mime?.startsWith('image/')
+                const viewerDocs = toViewerDocs(groupedIntakeDocuments)
+
+                if (!fileUrl) {
+                  return (
+                    <div key={`${doc.id ?? 'doc'}-${idx}`} className="flex items-center gap-2 rounded-[10px] border border-[var(--line)] bg-white px-3 py-2 text-[12px] text-[var(--text-muted)]">
+                      <FileText size={14} className="shrink-0 opacity-50" />
+                      {fileDisplayName}
+                    </div>
+                  )
+                }
+
+                return (
+                  <button
+                    key={`${doc.id ?? 'doc'}-${idx}`}
+                    onClick={() => onViewDoc?.(viewerDocs, idx)}
+                    className="group overflow-hidden rounded-[10px] border border-[var(--line)] bg-white hover:border-[var(--accent)] cursor-pointer p-0"
+                    title={docLabel}
+                    type="button"
+                  >
+                    {isImage ? (
+                      <img
+                        src={fileUrl}
+                        alt={docLabel}
+                        className="h-[72px] w-[96px] object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-[72px] w-[180px] items-center gap-2 px-3 text-[12px] text-[var(--text-default)]">
+                        <FileText size={16} className="shrink-0 text-[var(--text-muted)]" />
+                        <span className="truncate">{fileDisplayName}</span>
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Delete notice */}
-        {actionType === 'delete' && (
+        {actionType === 'delete' && entry.entity_type !== 'intake_documents' && (
           <div
             className="mt-3 rounded-[var(--radius-md)] border px-4 py-2 text-[13px] font-medium"
             style={{ borderColor: '#EF444430', background: '#FEF2F2', color: '#EF4444' }}
@@ -408,7 +518,17 @@ function HistoryEntry({ entry, isLast, ro, onPaymentClick }: { entry: AuditEntry
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export default function RecordHistory({ entries, ro, onPaymentClick }: RecordHistoryProps) {
+export default function RecordHistory({ entries, ro, onPaymentClick, fkResolvers }: RecordHistoryProps) {
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerDocs, setViewerDocs] = useState<CustomerDocument[]>([])
+  const [viewerIndex, setViewerIndex] = useState(0)
+
+  const handleViewDoc = (docs: CustomerDocument[], index: number) => {
+    setViewerDocs(docs)
+    setViewerIndex(index)
+    setViewerOpen(true)
+  }
+
   const sorted = [...entries].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   )
@@ -416,10 +536,26 @@ export default function RecordHistory({ entries, ro, onPaymentClick }: RecordHis
   if (sorted.length === 0) return null
 
   return (
-    <div className="pt-1">
-      {sorted.map((entry, idx) => (
-        <HistoryEntry key={`${entry.id}-${entry.entity_type}`} entry={entry} isLast={idx === sorted.length - 1} ro={ro} onPaymentClick={onPaymentClick} />
-      ))}
-    </div>
+    <>
+      <div className="pt-1">
+        {sorted.map((entry, idx) => (
+          <HistoryEntry
+            key={`${entry.id}-${entry.entity_type}`}
+            entry={entry}
+            isLast={idx === sorted.length - 1}
+            ro={ro}
+            onPaymentClick={onPaymentClick}
+            onViewDoc={handleViewDoc}
+            fkResolvers={fkResolvers}
+          />
+        ))}
+      </div>
+      <DocumentViewer
+        documents={viewerDocs}
+        initialIndex={viewerIndex}
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+      />
+    </>
   )
 }

@@ -14,6 +14,8 @@ import CustomerEditDialog from '@/views/customers-view/components/CustomerEditDi
 import AddVehicleDialog from '@/views/customers-view/components/AddVehicleDialog'
 import AddTransactionDialog from '@/views/customers-view/components/AddTransactionDialog'
 import RecordHistory from '@/components/RecordHistory'
+import DocumentViewer from '@/components/DocumentViewer'
+import type { CustomerDocument } from '@/types/document'
 import { useAuth } from '@/hooks/useAuth'
 import { ArrowLeft, Car, CreditCard, FileText, History, Mail, Phone, Plus } from 'lucide-react'
 
@@ -71,6 +73,9 @@ export default function CustomerDetailPage() {
   const [vehicleOpen, setVehicleOpen] = useState(false)
   const [transactionOpen, setTransactionOpen] = useState(false)
   const [wizardCustomer, setWizardCustomer] = useState<Customer | null>(null)
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerDocs, setViewerDocs] = useState<CustomerDocument[]>([])
+  const [viewerIndex, setViewerIndex] = useState(0)
   const [wizardVehicle, setWizardVehicle] = useState<Vehicle | null>(null)
 
   const customerQuery = useQuery({
@@ -292,10 +297,15 @@ export default function CustomerDetailPage() {
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                       {documents
                         .filter(doc => doc.category === 'drivers_license' && doc.file?.url)
-                        .map(doc => (
-                          <a key={doc.id} href={doc.file?.url ?? '#'} target="_blank" rel="noreferrer" className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--surface-1)]">
+                        .map((doc, idx, arr) => (
+                          <button
+                            key={doc.id}
+                            type="button"
+                            className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--surface-1)] cursor-pointer p-0 hover:border-[var(--accent)] transition-colors"
+                            onClick={() => { setViewerDocs(arr); setViewerIndex(idx); setViewerOpen(true) }}
+                          >
                             <img src={doc.file?.url ?? ''} alt="Driver license" className="h-[88px] w-full object-cover" />
-                          </a>
+                          </button>
                         ))}
                     </div>
                   )}
@@ -453,6 +463,12 @@ export default function CustomerDetailPage() {
           setWizardVehicle(null)
           navigate(`/ros/${roId}`)
         }}
+      />
+      <DocumentViewer
+        documents={viewerDocs}
+        initialIndex={viewerIndex}
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
       />
     </div>
   )

@@ -160,18 +160,13 @@ export default function VehiclePanel({ roId, customerId, vehicle, onViewDetails 
               <SegCell label="State"       value={vehicle.license_state} border />
             </Box>
             {/* Row 3: VIN (full width) */}
-            <Box sx={{ display: 'flex', borderBottom: '1px solid', borderColor: 'divider' }}>
-              <SegCell label="VIN" value={vehicle.vin} mono />
-            </Box>
-            {/* Row 4: Insurance Company · Policy Number */}
             <Box sx={{ display: 'flex' }}>
-              <SegCell label="Insurance Company" value={vehicle.insurance_company} />
-              <SegCell label="Policy Number"     value={vehicle.insurance_policy_number} border />
+              <SegCell label="VIN" value={vehicle.vin} mono />
             </Box>
           </Box>
         ) : (
           <Typography variant="body2" color="text.disabled">
-            No vehicle linked to this repair order. Add one to capture VIN, plate, and insurance details.
+            No vehicle linked to this repair order. Add one to capture VIN, plate, and mileage details.
           </Typography>
         )}
 
@@ -297,20 +292,6 @@ export default function VehiclePanel({ roId, customerId, vehicle, onViewDetails 
             <option value="" />
             {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
           </TextField>
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            label="Insurance Company" size="small" fullWidth
-            value={f?.insurance_company ?? ''}
-            onChange={(e) => setField('insurance_company', e.target.value)}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            label="Policy Number" size="small" fullWidth
-            value={f?.insurance_policy_number ?? ''}
-            onChange={(e) => setField('insurance_policy_number', e.target.value)}
-          />
         </Grid>
       </Grid>
 

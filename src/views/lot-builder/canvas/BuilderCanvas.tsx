@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { Stage, Layer, Rect, Line, Circle, Image as KonvaImage, Text } from 'react-konva'
 import type Konva from 'konva'
-import { useBuilderStore } from '@/stores/builderStore'
+import { useBuilderStore, makeSpotLabel } from '@/stores/builderStore'
 import type { ZoneCanvasState, StructureShape, CanvasSpot } from '@/stores/builderStore'
 import LotBoundaryShape from './LotBoundaryShape'
 import ZoneShape from './ZoneShape'
@@ -55,10 +55,8 @@ function findZoneAtPoint(x: number, y: number, zones: ZoneCanvasState[]): ZoneCa
   return null
 }
 
-function nextSpotLabel(zone: ZoneCanvasState, zoneSpots: CanvasSpot[]): string {
-  const prefix = zone.label.trim()[0]?.toUpperCase() ?? 'S'
-  const count = zoneSpots.length + 1
-  return `${prefix}${String(count).padStart(2, '0')}`
+function nextSpotLabel(layoutLabel: string, zone: ZoneCanvasState, zoneSpots: CanvasSpot[]): string {
+  return makeSpotLabel(layoutLabel, zone.label, zoneSpots.length + 1)
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────────
@@ -80,13 +78,20 @@ interface RenameState {
   w: number
 }
 
+// spot id → { isOccupied, jobLabel } — passed in by live/spot-map views
+export interface SpotLiveData {
+  isOccupied: boolean
+  jobLabel: string | null  // e.g. "#42" or null when vacant
+}
+
 interface BuilderCanvasProps {
   readonly?: boolean
+  spotLiveData?: Record<number, SpotLiveData>
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────────
 
-export default function BuilderCanvas({ readonly = false }: BuilderCanvasProps) {
+export default function BuilderCanvas({ readonly = false, spotLiveData }: BuilderCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
   const [fitScale, setFitScale] = useState(1)
@@ -116,7 +121,7 @@ export default function BuilderCanvas({ readonly = false }: BuilderCanvasProps) 
   const [bgImgEl, setBgImgEl] = useState<HTMLImageElement | null>(null)
 
   const {
-    boundary, zones, structures, canvasSpots,
+    boundary, zones, structures, canvasSpots, layoutLabel,
     zonePolyInProgress, spotPolyInProgress,
     selectedTempId, selectedStructureId, selectedSpotTempId,
     toolMode, backgroundImage, backgroundOpacity, bgX, bgY, bgW, bgH,
@@ -345,6 +350,7 @@ export default function BuilderCanvas({ readonly = false }: BuilderCanvasProps) 
 
   const openRename = useCallback((zone: ZoneCanvasState) => {
     if (readonly) return
+    if (toolMode === 'place-spot' || toolMode === 'draw-spot-poly') return
     setRenameState({
       tempId: zone.tempId,
       label: zone.label,
@@ -352,7 +358,7 @@ export default function BuilderCanvas({ readonly = false }: BuilderCanvasProps) 
       y: zone.canvas_y + INLINE_RENAME_PADDING / 2,
       w: Math.max(60, zone.canvas_w - INLINE_RENAME_PADDING),
     })
-  }, [readonly])
+  }, [readonly, toolMode])
 
   const handleMouseUp = () => {
     if (!drawState) return
@@ -378,7 +384,7 @@ export default function BuilderCanvas({ readonly = false }: BuilderCanvasProps) 
           id: 0,
           tempId: crypto.randomUUID(),
           zoneTempId: zone.tempId,
-          label: nextSpotLabel(zone, zoneSpots),
+          label: nextSpotLabel(layoutLabel, zone, zoneSpots),
           spot_type: 'standard',
           canvas_x: x,
           canvas_y: y,
@@ -528,6 +534,7 @@ export default function BuilderCanvas({ readonly = false }: BuilderCanvasProps) 
           {/* Canvas spots */}
           {canvasSpots.map((spot) => {
             const zone = zones.find((z) => z.tempId === spot.zoneTempId)
+            const live = spotLiveData?.[spot.id]
             return (
               <SpotShape
                 key={spot.tempId}
@@ -537,6 +544,8 @@ export default function BuilderCanvas({ readonly = false }: BuilderCanvasProps) 
                 readonly={readonly}
                 preview={readonly}
                 showLabel={showSpotLabels}
+                liveLabel={live !== undefined ? live.jobLabel : undefined}
+                isOccupied={live?.isOccupied}
                 onSelect={() => setSelectedSpot(spot.tempId)}
                 onUpdate={(updates) => updateCanvasSpot(spot.tempId, updates)}
               />

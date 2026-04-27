@@ -9,19 +9,34 @@ interface SpotShapeProps {
   readonly?: boolean
   preview?: boolean
   showLabel?: boolean
+  // Live map: when provided, overrides the static spot.label in preview mode.
+  // null = vacant (no text); string = occupied (show this label, e.g. job #)
+  liveLabel?: string | null
+  isOccupied?: boolean
   onSelect: () => void
   onUpdate: (updates: Partial<CanvasSpot>) => void
 }
 
 export default function SpotShape({
-  spot, zone, selected, readonly = false, preview = false, showLabel = true, onSelect, onUpdate,
+  spot, zone, selected, readonly = false, preview = false, showLabel = true,
+  liveLabel, isOccupied,
+  onSelect, onUpdate,
 }: SpotShapeProps) {
   const color = zone?.color_hex ?? '#3B82F6'
   const previewFill: Record<CanvasSpot['spot_type'], string> = {
     standard: '#22C55E', accessible: '#2563EB', oversized: '#F97316', reserved: '#F43F5E',
   }
-  const base = preview ? previewFill[spot.spot_type] : color
+  // In live/preview mode: occupied = zone color (warm), vacant = light grey
+  const liveBase = preview && liveLabel !== undefined
+    ? (isOccupied ? '#F59E0B' : '#CBD5E1')
+    : null
+  const base = liveBase ?? (preview ? previewFill[spot.spot_type] : color)
   const borderColor = selected && !preview ? '#2563EB' : base
+
+  // Text to show: in preview with live data, show liveLabel (null = vacant = no text)
+  const displayLabel = (preview && liveLabel !== undefined)
+    ? (liveLabel ?? '')
+    : spot.label
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (spot.canvas_points) {
@@ -66,7 +81,7 @@ export default function SpotShape({
             x={cx - 20}
             y={cy - 6}
             width={40}
-            text={spot.label}
+            text={displayLabel}
             fontSize={9}
             fontStyle="bold"
             fill={preview ? '#0f172a' : (selected ? '#2563EB' : color)}

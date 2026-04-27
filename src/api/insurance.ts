@@ -8,11 +8,11 @@ export interface CreateInsuranceInput {
   repair_order_id: number
   has_first_party?: boolean
   has_third_party?: boolean
-  first_party_company?: string
+  first_party_company_id?: number
   first_party_claim_number?: string
   first_party_rep_name?: string
   first_party_rep_phone?: string
-  third_party_company?: string
+  third_party_company_id?: number
   third_party_claim_number?: string
   third_party_rep_name?: string
   third_party_rep_phone?: string

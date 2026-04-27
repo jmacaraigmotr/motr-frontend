@@ -14,6 +14,7 @@ import AddTransactionDialog from '../customers-view/components/AddTransactionDia
 import CustomerDetailDialog from '../customers-view/components/CustomerDetailDialog'
 import CustomerEditDialog from '../customers-view/components/CustomerEditDialog'
 import TransactionDetailsModal from '@/components/TransactionDetailsModal'
+import EditTransactionDialog from '@/components/EditTransactionDialog'
 import VehicleDetailDialog from '../customers-view/components/VehicleDetailDialog'
 import NewROWizard from '@/components/NewROWizard'
 import { KpiCard, PageHeader, Button, StatusPill, FilterPill, EmptyState } from '@/ui'
@@ -118,6 +119,7 @@ export default function AccountingView() {
   const [editCustomer,       setEditCustomer]       = useState<Customer | null>(null)
   const [newROCustomer,      setNewROCustomer]      = useState<Customer | null>(null)
   const [addTxOpen,          setAddTxOpen]          = useState(false)
+  const [editPayment,        setEditPayment]        = useState<PaymentWithContext | null>(null)
 
   const { data: customerData } = useQuery({
     queryKey: ['customer_detail_tx', selectedCustomerId],
@@ -362,7 +364,8 @@ export default function AccountingView() {
                     return (
                       <tr
                         key={p.id}
-                        className="border-b border-[var(--line)] last:border-b-0 group transition-colors odd:bg-white even:bg-[var(--surface-0)] hover:!bg-[var(--surface-1)]"
+                        onClick={() => setSelectedPayment(p)}
+                        className="border-b border-[var(--line)] last:border-b-0 group transition-colors odd:bg-white even:bg-[var(--surface-0)] hover:!bg-[var(--surface-1)] cursor-pointer"
                       >
                         {/* Date */}
                         <td className="px-5 py-3.5 align-middle whitespace-nowrap">
@@ -475,7 +478,7 @@ export default function AccountingView() {
                               View
                             </button>
                             <button
-                              onClick={() => setSelectedPayment(p)}
+                              onClick={() => setEditPayment(p)}
                               className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[var(--radius-sm)] text-[12px] font-medium text-[var(--text-default)] border border-[var(--line)] bg-transparent hover:bg-[var(--surface-1)] transition-colors"
                             >
                               <Pencil size={12} className="shrink-0" />
@@ -515,7 +518,17 @@ export default function AccountingView() {
 
       {/* Modals */}
       <RODetailDrawer roId={selectedROId} onClose={() => setSelectedROId(null)} />
-      <TransactionDetailsModal payment={selectedPayment} onClose={() => setSelectedPayment(null)} />
+      <TransactionDetailsModal
+        payment={selectedPayment}
+        onClose={() => setSelectedPayment(null)}
+        onEdit={(p) => { setSelectedPayment(null); setEditPayment(p as PaymentWithContext) }}
+        onDelete={(p) => deleteMut.mutate(p.id)}
+      />
+      <EditTransactionDialog
+        payment={editPayment}
+        onClose={() => setEditPayment(null)}
+        onSaved={() => setEditPayment(null)}
+      />
       {vehicleForDialog && (
         <VehicleDetailDialog
           vehicle={vehicleForDialog}

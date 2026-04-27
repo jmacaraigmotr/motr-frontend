@@ -79,33 +79,6 @@ export default function SpotConfigPanel({ zone, onUpdate, onClose }: SpotConfigP
 
       <Divider />
 
-      {/* Spot count */}
-      <Box>
-        <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block', mb: 1 }}>
-          PARKING SPOTS
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
-          <TextField
-            label="Total spots"
-            type="number"
-            size="small"
-            value={zone.spotCount}
-            onChange={(e) => handleSpotCount(e.target.value)}
-            inputProps={{ min: 0, max: 200 }}
-            sx={{ flex: 1 }}
-          />
-          <TextField
-            label="Per row"
-            type="number"
-            size="small"
-            value={zone.spots_per_row}
-            onChange={(e) => handleSpotsPerRow(e.target.value)}
-            inputProps={{ min: 1, max: 20 }}
-            sx={{ width: 76 }}
-          />
-        </Box>
-      </Box>
-
       {/* Zone type */}
       <FormControl size="small" fullWidth>
         <InputLabel>Zone type</InputLabel>

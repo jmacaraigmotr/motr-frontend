@@ -21,7 +21,7 @@ export interface LotLayout {
   boundary_w: number | null
   boundary_h: number | null
   canvas_shapes: string | null       // JSON-serialised StructureShape[]
-  background_image?: string | null   // data URL for blueprint/reference layer
+  background_image?: string | null   // CDN URL for blueprint/reference layer (never base64)
   background_opacity?: number | null // 0–1
   created_at: string
   created_by: number
@@ -66,6 +66,9 @@ export interface LotSpot {
   current_vehicle_id?: number | null
   ro_number?: string | null
   ro_status?: string | null
+  current_ro?: { id: number; job_number: number | null; ro_number: string } | null
+  // canvas endpoint JOIN alias
+  ro?: { id: number; job_number: number | null; ro_number: string } | null
   vehicle?: {
     year: number | null
     make: string | null
@@ -279,4 +282,18 @@ export const lotApi = {
 
   getSpotDetail: (spot_id: number): Promise<SpotDetail> =>
     api.get('/lot/spots/detail', { params: { spot_id } }),
+
+  // Upload a blueprint image to Xano file storage.
+  // Xano returns an attachment object with a `path` field (e.g. /vault/xxx/file.png).
+  // We prepend VITE_XANO_BASE to form the full public CDN URL.
+  uploadBackground: async (file: File): Promise<{ url: string }> => {
+    const form = new FormData()
+    form.append('background_file', file)
+    const attachment = await api.post<{ path: string; name: string; type: string; size: number }>(
+      '/lot/layouts/upload_background',
+      form,
+    )
+    const base = import.meta.env.VITE_XANO_BASE as string
+    return { url: base + attachment.path }
+  },
 }

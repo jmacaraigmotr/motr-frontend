@@ -328,13 +328,16 @@ export default function VehicleDetailDialog({ vehicle: v, onClose, onEdit, onDel
   return (
     <Dialog open fullWidth maxWidth="sm" onClose={onClose} sx={zIndex != null ? { zIndex } : undefined} PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}>
       <Box sx={{ px: 3, pt: 3, pb: 2.5, bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider' }}>
-        <IconButton
-          size="small"
-          onClick={onClose}
-          sx={{ position: 'absolute', top: 12, right: 12, color: 'text.secondary' }}
-        >
-          <X size={17} />
-        </IconButton>
+        <Box sx={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Tooltip title="Edit History">
+            <IconButton size="small" onClick={() => setHistoryOpen(true)} sx={{ color: 'text.secondary' }}>
+              <History size={16} />
+            </IconButton>
+          </Tooltip>
+          <IconButton size="small" onClick={onClose} sx={{ color: 'text.secondary' }}>
+            <X size={17} />
+          </IconButton>
+        </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
           <Box sx={{ p: 1.25, bgcolor: 'action.hover', borderRadius: 2.5, display: 'flex', color: 'text.secondary' }}>
@@ -395,11 +398,6 @@ export default function VehicleDetailDialog({ vehicle: v, onClose, onEdit, onDel
         {tab === 1 && <RepairOrdersTab vehicleId={v.id} customerId={v.customer_id} onSelectRO={onSelectRO} />}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2.5, pt: 0, gap: 1 }}>
-        <Tooltip title="Edit History">
-          <IconButton size="small" onClick={() => setHistoryOpen(true)} sx={{ mr: 'auto', color: 'text.secondary' }}>
-            <History size={16} />
-          </IconButton>
-        </Tooltip>
         <Button onClick={onEdit} variant="outlined" size="small" startIcon={<Pencil size={13} />} sx={{ fontSize: '0.78rem' }}>
           Edit
         </Button>

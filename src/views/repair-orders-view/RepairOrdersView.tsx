@@ -62,7 +62,11 @@ function owedAmount(ro: RepairOrderListItem) {
 
 function fmtDate(iso: string | null | undefined) {
   if (!iso) return '—'
-  try { return format(parseISO(iso), 'MMM d') } catch { return iso }
+  try {
+    const n = Number(iso)
+    const d = isNaN(n) ? parseISO(iso) : new Date(n)
+    return format(d, 'MMM d')
+  } catch { return iso }
 }
 
 // ── Filter tabs ───────────────────────────────────────────────────────────────
@@ -74,7 +78,7 @@ type DateOffset = 'today' | 'yesterday' | 'two_days_ago'
 
 const PRIMARY_TABS: { key: ViewTab; label: string }[] = [
   { key: 'open',            label: 'Open'            },
-  { key: 'needs_attention', label: 'Needs Attention' },
+  { key: 'needs_attention', label: 'Waiting for Payment' },
   { key: 'all',             label: 'All'             },
   { key: 'closed',          label: 'Closed'          },
 ]
@@ -241,9 +245,9 @@ export default function RepairOrdersView() {
             icon={<ClipboardList size={17} />}
           />
           <KpiCard
-            label="Needs Attention"
+            label="Waiting for Payment"
             value={isLoading ? '—' : needsCount}
-            caption={needsCount > 0 ? 'Requires action today' : 'All jobs on track'}
+            caption={needsCount > 0 ? 'Awaiting payment collection' : 'No outstanding payments'}
             tone={needsCount > 0 ? 'warning' : 'neutral'}
             icon={<AlertTriangle size={17} />}
           />
@@ -392,8 +396,8 @@ export default function RepairOrdersView() {
                     <td colSpan={9}>
                       <EmptyState
                         template={search ? 'no-results' : 'no-records-yet'}
-                        headline={view === 'needs_attention' ? 'No ROs need attention' : search ? 'No results found' : 'No repair orders'}
-                        body={view === 'needs_attention' ? 'All repair orders are on track.' : undefined}
+                        headline={view === 'needs_attention' ? 'No ROs waiting for payment' : search ? 'No results found' : 'No repair orders'}
+                        body={view === 'needs_attention' ? 'All payments are collected.' : undefined}
                         action={!search && view === 'open' ? { label: 'New Repair Order', onClick: () => setWizardOpen(true) } : undefined}
                       />
                     </td>
@@ -486,24 +490,13 @@ export default function RepairOrdersView() {
                         <td className="px-5 py-3.5 align-middle hidden sm:table-cell">
                           <div className="flex flex-col gap-0.5">
                             {ro.lot_location && (
-                              <div className="flex flex-col gap-0">
-                                {ro.lot_location.lot_layouts?.label && (
-                                  <div className="flex items-baseline gap-1">
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)] shrink-0">Lot</span>
-                                    <span className="text-[12px] text-[var(--text-default)] leading-tight">{ro.lot_location.lot_layouts.label}</span>
-                                  </div>
-                                )}
-                                {ro.lot_location.zones?.name && (
-                                  <div className="flex items-baseline gap-1">
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)] shrink-0">Zone</span>
-                                    <span className="text-[12px] text-[var(--text-muted)] leading-tight">{ro.lot_location.zones.name}</span>
-                                  </div>
-                                )}
-                                <div className="flex items-baseline gap-1">
-                                  <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-[var(--text-muted)] shrink-0">Spot</span>
-                                  <span className="text-[12px] text-[var(--text-default)] leading-tight">{ro.lot_location.name}</span>
-                                </div>
-                              </div>
+                              <span className="text-[12px] text-[var(--text-default)] leading-tight">
+                                {[
+                                  ro.lot_location.lot_layouts?.label,
+                                  ro.lot_location.zones?.name,
+                                  ro.lot_location.name,
+                                ].filter(Boolean).join(' · ')}
+                              </span>
                             )}
                             {out && (
                               <span
@@ -518,7 +511,12 @@ export default function RepairOrdersView() {
                                 {isOverdue ? ' · OVR' : ''}
                               </span>
                             )}
-                            {!ro.lot_location && !out && (
+                            {ro.arrived_at && (
+                              <span className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+                                In: {fmtDate(ro.arrived_at)}
+                              </span>
+                            )}
+                            {!ro.lot_location && !out && !ro.arrived_at && (
                               <span className="text-[12px] text-[var(--text-muted)]">—</span>
                             )}
                           </div>

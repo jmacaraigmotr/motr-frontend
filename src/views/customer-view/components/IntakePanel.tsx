@@ -25,7 +25,9 @@ import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import Divider from '@mui/material/Divider'
 import Chip from '@mui/material/Chip'
+import FormGroup from '@mui/material/FormGroup'
 import { Save, Edit, Trash2, X, Upload, Camera, FileText, User, Car, ClipboardList, ChevronDown, Truck, Navigation, Layers, Sparkles, FileSearch, Receipt } from 'lucide-react'
+import DocumentViewer from '@/components/DocumentViewer'
 
 interface ROSummary {
   jobNumber?: number | null
@@ -168,6 +170,7 @@ function FileSection({
   uploading,
   onUpload,
   onDelete,
+  onView,
   icon,
 }: {
   label: string
@@ -175,6 +178,7 @@ function FileSection({
   uploading: boolean
   onUpload: (file: File) => void
   onDelete: (id: number) => void
+  onView: (index: number) => void
   icon: React.ReactNode
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -215,7 +219,7 @@ function FileSection({
         </Box>
       ) : (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          {docs.map(doc => {
+          {docs.map((doc, idx) => {
             const isImage = doc.file?.mime?.startsWith('image/')
             return (
               <Box
@@ -232,7 +236,7 @@ function FileSection({
                     src={doc.file.url}
                     alt={doc.label ?? 'file'}
                     sx={{ width: 80, height: 80, objectFit: 'cover', display: 'block', cursor: 'pointer' }}
-                    onClick={() => window.open(doc.file!.url, '_blank')}
+                    onClick={() => onView(idx)}
                   />
                 ) : (
                   <Box
@@ -241,7 +245,7 @@ function FileSection({
                       alignItems: 'center', justifyContent: 'center', gap: 0.5,
                       bgcolor: 'action.hover', cursor: 'pointer', px: 1,
                     }}
-                    onClick={() => doc.file?.url && window.open(doc.file.url, '_blank')}
+                    onClick={() => onView(idx)}
                   >
                     <FileText size={20} style={{ opacity: 0.5, flexShrink: 0 }} />
                     <Typography sx={{
@@ -287,6 +291,16 @@ export default function IntakePanel({ roId, jobType, dealerClaimType, roSummary 
   const [apiError, setApiError] = useState<string | null>(null)
   const [uploadingPoliceReport, setUploadingPoliceReport] = useState(false)
   const [uploadingIntakePhoto, setUploadingIntakePhoto]   = useState(false)
+  const [viewerOpen, setViewerOpen]   = useState(false)
+  const [viewerDocs, setViewerDocs]   = useState<CustomerDocument[]>([])
+  const [viewerIndex, setViewerIndex] = useState(0)
+  const [docToDelete, setDocToDelete] = useState<number | null>(null)
+
+  function openViewer(docs: CustomerDocument[], index: number) {
+    setViewerDocs(docs)
+    setViewerIndex(index)
+    setViewerOpen(true)
+  }
 
   const fields = getFields(jobType, dealerClaimType)
 
@@ -334,7 +348,11 @@ export default function IntakePanel({ roId, jobType, dealerClaimType, roSummary 
 
   const deleteDocMut = useMutation({
     mutationFn: (id: number) => documentsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ro_documents', roId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ro_documents', roId] })
+      qc.invalidateQueries({ queryKey: ['repair_order_activity_page', roId] })
+      setDocToDelete(null)
+    },
   })
 
   async function uploadFile(file: File, label: string, setUploading: (v: boolean) => void) {
@@ -509,7 +527,8 @@ export default function IntakePanel({ roId, jobType, dealerClaimType, roSummary 
               docs={policeReportDocs}
               uploading={uploadingPoliceReport}
               onUpload={file => uploadFile(file, 'Police Report', setUploadingPoliceReport)}
-              onDelete={id => deleteDocMut.mutate(id)}
+              onDelete={id => setDocToDelete(id)}
+              onView={idx => openViewer(policeReportDocs, idx)}
               icon={<FileText size={16} />}
             />
           )}
@@ -519,7 +538,8 @@ export default function IntakePanel({ roId, jobType, dealerClaimType, roSummary 
               docs={intakePhotoDocs}
               uploading={uploadingIntakePhoto}
               onUpload={file => uploadFile(file, 'Intake Photo', setUploadingIntakePhoto)}
-              onDelete={id => deleteDocMut.mutate(id)}
+              onDelete={id => setDocToDelete(id)}
+              onView={idx => openViewer(intakePhotoDocs, idx)}
               icon={<Camera size={16} />}
             />
           )}
@@ -709,12 +729,30 @@ export default function IntakePanel({ roId, jobType, dealerClaimType, roSummary 
                   </Grid>
                 )}
                 {fields.pointOfImpact && (
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      label="Point of Impact" size="small" fullWidth
-                      value={f.point_of_impact ?? ''}
-                      onChange={e => setField('point_of_impact', e.target.value || undefined)}
-                    />
+                  <Grid item xs={12}>
+                    <Typography variant="caption" color="text.secondary" display="block" mb={0.75}>
+                      Point of Impact
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                      {['Front', 'Rear', 'Left', 'Right', 'Front-Left', 'Front-Right', 'Rear-Left', 'Rear-Right', 'Roof', 'Hood', 'Trunk', 'Undercarriage'].map(area => {
+                        const selected = (f.point_of_impact ?? '').split(',').map(s => s.trim()).filter(Boolean).includes(area)
+                        return (
+                          <Chip
+                            key={area}
+                            label={area}
+                            size="small"
+                            color={selected ? 'primary' : 'default'}
+                            variant={selected ? 'filled' : 'outlined'}
+                            onClick={() => {
+                              const current = (f.point_of_impact ?? '').split(',').map(s => s.trim()).filter(Boolean)
+                              const next = selected ? current.filter(a => a !== area) : [...current, area]
+                              setField('point_of_impact', next.length ? next.join(', ') : undefined)
+                            }}
+                            sx={{ cursor: 'pointer' }}
+                          />
+                        )
+                      })}
+                    </Box>
                   </Grid>
                 )}
                 {fields.upd && (
@@ -763,7 +801,8 @@ export default function IntakePanel({ roId, jobType, dealerClaimType, roSummary 
                       docs={policeReportDocs}
                       uploading={uploadingPoliceReport}
                       onUpload={file => uploadFile(file, 'Police Report', setUploadingPoliceReport)}
-                      onDelete={id => deleteDocMut.mutate(id)}
+                      onDelete={id => setDocToDelete(id)}
+                      onView={idx => openViewer(policeReportDocs, idx)}
                       icon={<FileText size={16} />}
                     />
                   )}
@@ -773,7 +812,8 @@ export default function IntakePanel({ roId, jobType, dealerClaimType, roSummary 
                       docs={intakePhotoDocs}
                       uploading={uploadingIntakePhoto}
                       onUpload={file => uploadFile(file, 'Intake Photo', setUploadingIntakePhoto)}
-                      onDelete={id => deleteDocMut.mutate(id)}
+                      onDelete={id => setDocToDelete(id)}
+                      onView={idx => openViewer(intakePhotoDocs, idx)}
                       icon={<Camera size={16} />}
                     />
                   )}
@@ -792,6 +832,32 @@ export default function IntakePanel({ roId, jobType, dealerClaimType, roSummary 
             </DialogActions>
           </>
         )}
+      </Dialog>
+
+      <DocumentViewer
+        documents={viewerDocs}
+        initialIndex={viewerIndex}
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+      />
+
+      <Dialog open={docToDelete !== null} onClose={() => setDocToDelete(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete Document</DialogTitle>
+        <DialogContent>
+          <Typography>Are you sure you want to delete this document? This cannot be undone.</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDocToDelete(null)} disabled={deleteDocMut.isPending}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={deleteDocMut.isPending}
+            startIcon={deleteDocMut.isPending ? <CircularProgress size={14} color="inherit" /> : <Trash2 size={14} />}
+            onClick={() => { if (docToDelete !== null) deleteDocMut.mutate(docToDelete) }}
+          >
+            Delete
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   )
