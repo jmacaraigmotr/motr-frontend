@@ -51,7 +51,7 @@ export default function EditTransactionDialog({ payment, onClose, onSaved }: Pro
     setPaymentStatus((payment.payment_status as PaymentStatus) ?? '')
     const rawDate = payment.date_added ?? payment.created_at
     setDateAdded(rawDate ? rawDate.slice(0, 10) : '')
-    setNotes((payment as Record<string, unknown>).notes as string ?? '')
+    setNotes((payment as unknown as Record<string, unknown>).notes as string ?? '')
     setApiError(null)
   }, [payment?.id])
 

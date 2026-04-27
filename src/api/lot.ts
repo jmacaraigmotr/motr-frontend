@@ -294,6 +294,6 @@ export const lotApi = {
       form,
     )
     const base = import.meta.env.VITE_XANO_BASE as string
-    return { url: base + attachment.path }
+    return { url: base + attachment.data.path }
   },
 }
